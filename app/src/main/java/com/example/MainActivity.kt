@@ -1,13 +1,18 @@
 package com.example
 
+import android.app.KeyguardManager
 import android.content.Intent
+import android.hardware.biometrics.BiometricManager
+import android.hardware.biometrics.BiometricPrompt
+import android.os.Build
 import android.os.Bundle
+import android.os.CancellationSignal
 import android.view.WindowManager
+import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.biometric.BiometricManager
-import androidx.biometric.BiometricPrompt
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -62,11 +67,11 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
-import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.navigation.NavDestination
 import androidx.navigation.NavDestination.Companion.hasRoute
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.NavHost
@@ -100,6 +105,9 @@ object BackupRoute
 object SettingsRoute
 
 @Serializable
+object OnboardingRoute
+
+@Serializable
 data class ThreadDetailRoute(val threadKey: String)
 
 @Serializable
@@ -114,7 +122,12 @@ data class PendingExternalAction(
     val composeBody: String? = null
 )
 
-class MainActivity : FragmentActivity() {
+/**
+ * Single-Activity entry point extending `ComponentActivity` directly so Jetpack Compose
+ * `rememberLauncherForActivityResult` uses 32-bit `ActivityResultRegistry` request codes cleanly
+ * without legacy FragmentActivity 16-bit requestCode restrictions.
+ */
+class MainActivity : ComponentActivity() {
 
     private var pendingExternalAction by mutableStateOf<PendingExternalAction?>(null)
 
@@ -135,7 +148,7 @@ class MainActivity : FragmentActivity() {
         val appContainer = (applicationContext as TraiSmsApp).container
         val isStreamingOrEmulator = BuildConfig.DEBUG || appContainer.systemSmsHelper.isRunningOnEmulator()
 
-        // Ensure window is NOT blacked out by FLAG_SECURE in the browser Streaming Emulator on launch
+        // Keep FLAG_SECURE clear in Streaming Emulator / debug preview so the browser stream renders visibly
         if (isStreamingOrEmulator) {
             window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
         } else {
@@ -151,9 +164,6 @@ class MainActivity : FragmentActivity() {
             )
             val settings by mainViewModel.settings.collectAsStateWithLifecycle()
 
-            // Dynamically enforce or clear FLAG_SECURE:
-            // - On physical release devices: enforced whenever settings.blockScreenshots == true (ON by default)
-            // - On Streaming Emulator / Debug preview: kept clear unless user explicitly forces it in Settings
             LaunchedEffect(settings.blockScreenshots, settings.userForcedFlagSecureInStream) {
                 val shouldEnableFlagSecure = if (isStreamingOrEmulator) {
                     settings.blockScreenshots && settings.userForcedFlagSecureInStream
@@ -176,7 +186,7 @@ class MainActivity : FragmentActivity() {
             }
 
             TraiSmsTheme {
-                TraiSmsRootContent(
+                TraiSmsPrimaryApp(
                     activity = this@MainActivity,
                     viewModel = mainViewModel,
                     pendingExternalAction = pendingExternalAction,
@@ -217,7 +227,7 @@ class MainActivity : FragmentActivity() {
     }
 }
 
-private data class TopLevelNavItem(
+data class BottomNavDestination(
     val labelRes: Int,
     val route: Any,
     val selectedIcon: ImageVector,
@@ -225,9 +235,44 @@ private data class TopLevelNavItem(
     val testTag: String
 )
 
+private val PrimaryBottomDestinations = listOf(
+    BottomNavDestination(
+        labelRes = R.string.nav_messages,
+        route = MessagesRoute,
+        selectedIcon = Icons.Filled.ChatBubble,
+        unselectedIcon = Icons.Outlined.ChatBubbleOutline,
+        testTag = "bottom_nav_messages"
+    ),
+    BottomNavDestination(
+        labelRes = R.string.nav_archive,
+        route = ArchiveRoute,
+        selectedIcon = Icons.Filled.Archive,
+        unselectedIcon = Icons.Outlined.Archive,
+        testTag = "bottom_nav_archive"
+    ),
+    BottomNavDestination(
+        labelRes = R.string.nav_backup,
+        route = BackupRoute,
+        selectedIcon = Icons.Filled.Backup,
+        unselectedIcon = Icons.Outlined.Backup,
+        testTag = "bottom_nav_backup"
+    ),
+    BottomNavDestination(
+        labelRes = R.string.nav_settings,
+        route = SettingsRoute,
+        selectedIcon = Icons.Filled.Settings,
+        unselectedIcon = Icons.Outlined.Settings,
+        testTag = "bottom_nav_settings"
+    )
+)
+
+/**
+ * Primary Material 3 Light Composable structure hosting the 4-tab `BottomNavigationBar`
+ * (`Messages`, `Archive`, `Backup`, `Settings`) and adaptive `NavigationRail` on tablets.
+ */
 @Composable
-private fun TraiSmsRootContent(
-    activity: FragmentActivity,
+fun TraiSmsPrimaryApp(
+    activity: ComponentActivity,
     viewModel: MainViewModel,
     pendingExternalAction: PendingExternalAction?,
     onConsumeExternalAction: () -> Unit
@@ -248,10 +293,9 @@ private fun TraiSmsRootContent(
 
     var isSessionUnlocked by rememberSaveable { mutableStateOf(false) }
 
-    // Trigger BiometricPrompt automatically when App Lock is enabled
     LaunchedEffect(settings.appLockEnabled) {
         if (settings.appLockEnabled && !isSessionUnlocked) {
-            launchBiometricUnlock(activity) { unlocked ->
+            launchNativeBiometricUnlock(activity) { unlocked ->
                 isSessionUnlocked = unlocked
             }
         }
@@ -260,33 +304,10 @@ private fun TraiSmsRootContent(
     if (settings.appLockEnabled && !isSessionUnlocked) {
         AppLockGateScreen(
             onUnlockRequested = {
-                launchBiometricUnlock(activity) { unlocked ->
+                launchNativeBiometricUnlock(activity) { unlocked ->
                     isSessionUnlocked = unlocked
                 }
             }
-        )
-        return
-    }
-
-    // Show onboarding when not Default SMS App and user hasn't dismissed/seeded yet (unless launched via SENDTO)
-    val shouldShowOnboarding = !isDefaultSmsApp &&
-        !settings.onboardingDismissed &&
-        totalMessageCount == 0 &&
-        pendingExternalAction == null
-
-    if (shouldShowOnboarding) {
-        OnboardingScreen(
-            systemSmsHelper = viewModel.systemSmsHelper,
-            isDefaultSmsApp = isDefaultSmsApp,
-            showEmulatorDemoSeed = showEmulatorDemo,
-            onRoleOrPermissionsUpdated = {
-                viewModel.refreshPermissionsAndSyncIfAuthorized()
-                if (viewModel.systemSmsHelper.hasReadSmsPermission()) {
-                    viewModel.dismissOnboarding()
-                }
-            },
-            onSeedDemoInbox = { viewModel.seedDemoInbox() },
-            onSkipToInbox = { viewModel.dismissOnboarding() }
         )
         return
     }
@@ -295,7 +316,6 @@ private fun TraiSmsRootContent(
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = navBackStackEntry?.destination
 
-    // Handle external ACTION_SENDTO / notification deep-links
     LaunchedEffect(pendingExternalAction) {
         val action = pendingExternalAction ?: return@LaunchedEffect
         if (!action.openThreadKey.isNullOrBlank()) {
@@ -310,39 +330,6 @@ private fun TraiSmsRootContent(
             )
             onConsumeExternalAction()
         }
-    }
-
-    val topLevelItems = remember {
-        listOf(
-            TopLevelNavItem(
-                labelRes = R.string.nav_messages,
-                route = MessagesRoute,
-                selectedIcon = Icons.Filled.ChatBubble,
-                unselectedIcon = Icons.Outlined.ChatBubbleOutline,
-                testTag = "bottom_nav_messages"
-            ),
-            TopLevelNavItem(
-                labelRes = R.string.nav_archive,
-                route = ArchiveRoute,
-                selectedIcon = Icons.Filled.Archive,
-                unselectedIcon = Icons.Outlined.Archive,
-                testTag = "bottom_nav_archive"
-            ),
-            TopLevelNavItem(
-                labelRes = R.string.nav_backup,
-                route = BackupRoute,
-                selectedIcon = Icons.Filled.Backup,
-                unselectedIcon = Icons.Outlined.Backup,
-                testTag = "bottom_nav_backup"
-            ),
-            TopLevelNavItem(
-                labelRes = R.string.nav_settings,
-                route = SettingsRoute,
-                selectedIcon = Icons.Filled.Settings,
-                unselectedIcon = Icons.Outlined.Settings,
-                testTag = "bottom_nav_settings"
-            )
-        )
     }
 
     val isTopLevelDestination = currentDestination?.let { dest ->
@@ -389,11 +376,16 @@ private fun TraiSmsRootContent(
                         leftSwipeAction = settings.leftSwipeAction,
                         activeRegionBadge = activeRegionBadge,
                         syncProgress = syncProgress,
+                        isDefaultSmsApp = isDefaultSmsApp,
+                        showSetupBanner = !settings.onboardingDismissed,
                         showEmulatorDemoBanner = showEmulatorDemo,
+                        systemSmsHelper = viewModel.systemSmsHelper,
                         onSelectCategory = viewModel::selectCategory,
                         onSearchQueryChange = viewModel::updateSearchQuery,
                         onOpenThread = { key -> navController.navigate(ThreadDetailRoute(key)) },
                         onOpenCompose = { navController.navigate(ComposeSmsRoute()) },
+                        onOpenOnboardingGuide = { navController.navigate(OnboardingRoute) },
+                        onDismissSetupBanner = viewModel::dismissOnboarding,
                         onArchiveThread = viewModel::setThreadArchived,
                         onDeleteThread = viewModel::deleteThread,
                         onAssignSenderCategory = viewModel::assignSenderCategory,
@@ -445,7 +437,7 @@ private fun TraiSmsRootContent(
                         onNavigateToBackupTab = { navigateTopLevel(BackupRoute) },
                         onToggleAppLock = { enable ->
                             if (enable) {
-                                launchBiometricUnlock(activity) { verified ->
+                                launchNativeBiometricUnlock(activity) { verified ->
                                     if (verified) {
                                         isSessionUnlocked = true
                                         viewModel.updateAppLockEnabled(true)
@@ -458,6 +450,30 @@ private fun TraiSmsRootContent(
                         onToggleBlockScreenshots = viewModel::updateBlockScreenshots,
                         onRerunCategorization = viewModel::rerunCategorizationOnAll,
                         onDeleteAllMessagesInApp = viewModel::deleteAllMessagesInApp
+                    )
+                }
+
+                composable<OnboardingRoute> {
+                    BackHandler { navController.popBackStack() }
+                    OnboardingScreen(
+                        systemSmsHelper = viewModel.systemSmsHelper,
+                        isDefaultSmsApp = isDefaultSmsApp,
+                        showEmulatorDemoSeed = showEmulatorDemo,
+                        onRoleOrPermissionsUpdated = {
+                            viewModel.refreshPermissionsAndSyncIfAuthorized()
+                            if (viewModel.systemSmsHelper.hasReadSmsPermission()) {
+                                viewModel.dismissOnboarding()
+                                navController.popBackStack()
+                            }
+                        },
+                        onSeedDemoInbox = {
+                            viewModel.seedDemoInbox()
+                            navController.popBackStack()
+                        },
+                        onSkipToInbox = {
+                            viewModel.dismissOnboarding()
+                            navController.popBackStack()
+                        }
                     )
                 }
 
@@ -507,10 +523,12 @@ private fun TraiSmsRootContent(
             ) {
                 NavigationRail(
                     containerColor = MaterialTheme.colorScheme.surface,
-                    modifier = Modifier.fillMaxHeight()
+                    modifier = Modifier
+                        .fillMaxHeight()
+                        .testTag("primary_navigation_rail")
                 ) {
                     Spacer(modifier = Modifier.height(12.dp))
-                    topLevelItems.forEach { item ->
+                    PrimaryBottomDestinations.forEach { item ->
                         val selected = isRouteSelected(currentDestination, item.route)
                         NavigationRailItem(
                             selected = selected,
@@ -536,28 +554,12 @@ private fun TraiSmsRootContent(
                 contentWindowInsets = WindowInsets.safeDrawing,
                 bottomBar = {
                     if (isTopLevelDestination) {
-                        NavigationBar(
-                            containerColor = MaterialTheme.colorScheme.surface,
-                            tonalElevation = 2.dp
-                        ) {
-                            topLevelItems.forEach { item ->
-                                val selected = isRouteSelected(currentDestination, item.route)
-                                NavigationBarItem(
-                                    selected = selected,
-                                    onClick = { navigateTopLevel(item.route) },
-                                    icon = {
-                                        NavItemBadgedIcon(
-                                            item = item,
-                                            selected = selected,
-                                            totalUnreadCount = totalUnreadCount,
-                                            archivedCount = archivedCount
-                                        )
-                                    },
-                                    label = { Text(stringResource(item.labelRes)) },
-                                    modifier = Modifier.testTag(item.testTag)
-                                )
-                            }
-                        }
+                        BottomNavigationBar(
+                            currentDestination = currentDestination,
+                            totalUnreadCount = totalUnreadCount,
+                            archivedCount = archivedCount,
+                            onNavigate = navigateTopLevel
+                        )
                     }
                 }
             ) { scaffoldPadding ->
@@ -567,8 +569,41 @@ private fun TraiSmsRootContent(
     }
 }
 
+@Composable
+fun BottomNavigationBar(
+    currentDestination: NavDestination?,
+    totalUnreadCount: Int,
+    archivedCount: Int,
+    onNavigate: (Any) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    NavigationBar(
+        containerColor = MaterialTheme.colorScheme.surface,
+        tonalElevation = 2.dp,
+        modifier = modifier.testTag("bottom_navigation_bar")
+    ) {
+        PrimaryBottomDestinations.forEach { item ->
+            val selected = isRouteSelected(currentDestination, item.route)
+            NavigationBarItem(
+                selected = selected,
+                onClick = { onNavigate(item.route) },
+                icon = {
+                    NavItemBadgedIcon(
+                        item = item,
+                        selected = selected,
+                        totalUnreadCount = totalUnreadCount,
+                        archivedCount = archivedCount
+                    )
+                },
+                label = { Text(stringResource(item.labelRes)) },
+                modifier = Modifier.testTag(item.testTag)
+            )
+        }
+    }
+}
+
 private fun isRouteSelected(
-    destination: androidx.navigation.NavDestination?,
+    destination: NavDestination?,
     route: Any
 ): Boolean {
     if (destination == null) return false
@@ -583,16 +618,12 @@ private fun isRouteSelected(
 
 @Composable
 private fun NavItemBadgedIcon(
-    item: TopLevelNavItem,
+    item: BottomNavDestination,
     selected: Boolean,
     totalUnreadCount: Int,
     archivedCount: Int
 ) {
-    val badgeValue = when (item.route) {
-        is MessagesRoute -> totalUnreadCount
-        is ArchiveRoute -> 0
-        else -> 0
-    }
+    val badgeValue = if (item.route is MessagesRoute) totalUnreadCount else 0
     BadgedBox(
         badge = {
             if (badgeValue > 0) {
@@ -600,7 +631,7 @@ private fun NavItemBadgedIcon(
                     Text(badgeValue.coerceAtMost(99).toString())
                 }
             } else if (item.route is ArchiveRoute && archivedCount > 0) {
-                // Subtle count indicator only when non-intrusive
+                // Keep Archive icon uncluttered
             }
         }
     ) {
@@ -660,44 +691,74 @@ private fun AppLockGateScreen(onUnlockRequested: () -> Unit) {
     }
 }
 
-private fun launchBiometricUnlock(
-    activity: FragmentActivity,
+/**
+ * Native OS Biometric + Device PIN unlock helper running directly on `ComponentActivity`
+ * (zero `FragmentActivity` dependency).
+ */
+private fun launchNativeBiometricUnlock(
+    activity: ComponentActivity,
     onResult: (Boolean) -> Unit
 ) {
-    val biometricManager = BiometricManager.from(activity)
-    val authenticators = BiometricManager.Authenticators.BIOMETRIC_STRONG or
-        BiometricManager.Authenticators.BIOMETRIC_WEAK or
-        BiometricManager.Authenticators.DEVICE_CREDENTIAL
-
-    val canAuth = biometricManager.canAuthenticate(authenticators)
-    if (canAuth != BiometricManager.BIOMETRIC_SUCCESS) {
-        // Device/emulator has no biometric or lockscreen PIN enrolled; unlock gracefully
+    val keyguard = activity.getSystemService(KeyguardManager::class.java)
+    if (keyguard?.isDeviceSecure != true) {
         onResult(true)
         return
     }
 
-    val executor = ContextCompat.getMainExecutor(activity)
-    val prompt = BiometricPrompt(
-        activity,
-        executor,
-        object : BiometricPrompt.AuthenticationCallback() {
-            override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
-                onResult(true)
-            }
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+        val biometricManager = activity.getSystemService(BiometricManager::class.java)
+        val authenticators = BiometricManager.Authenticators.BIOMETRIC_STRONG or
+            BiometricManager.Authenticators.BIOMETRIC_WEAK or
+            BiometricManager.Authenticators.DEVICE_CREDENTIAL
 
-            override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
-                onResult(false)
-            }
+        if (biometricManager?.canAuthenticate(authenticators) != BiometricManager.BIOMETRIC_SUCCESS) {
+            onResult(true)
+            return
         }
-    )
 
-    val promptInfo = BiometricPrompt.PromptInfo.Builder()
-        .setTitle("Unlock TRAISms")
-        .setSubtitle("Verify identity to access encrypted SMS vault")
-        .setAllowedAuthenticators(authenticators)
-        .build()
+        val prompt = BiometricPrompt.Builder(activity)
+            .setTitle("Unlock TRAISms")
+            .setSubtitle("Verify identity to access encrypted SMS vault")
+            .setAllowedAuthenticators(authenticators)
+            .build()
 
-    prompt.authenticate(promptInfo)
+        prompt.authenticate(
+            CancellationSignal(),
+            ContextCompat.getMainExecutor(activity),
+            object : BiometricPrompt.AuthenticationCallback() {
+                override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult?) {
+                    onResult(true)
+                }
+
+                override fun onAuthenticationError(errorCode: Int, errString: CharSequence?) {
+                    onResult(false)
+                }
+            }
+        )
+    } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+        @Suppress("DEPRECATION")
+        val prompt = BiometricPrompt.Builder(activity)
+            .setTitle("Unlock TRAISms")
+            .setSubtitle("Verify identity to access encrypted SMS vault")
+            .setDeviceCredentialAllowed(true)
+            .build()
+
+        prompt.authenticate(
+            CancellationSignal(),
+            ContextCompat.getMainExecutor(activity),
+            object : BiometricPrompt.AuthenticationCallback() {
+                override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult?) {
+                    onResult(true)
+                }
+
+                override fun onAuthenticationError(errorCode: Int, errString: CharSequence?) {
+                    onResult(false)
+                }
+            }
+        )
+    } else {
+        onResult(true)
+    }
 }
 
 @Composable

@@ -115,7 +115,7 @@ dependencies {
   implementation(libs.sqlcipher.android)
   implementation(libs.tink.android)
   implementation(libs.androidx.work.runtime.ktx)
-  implementation(libs.androidx.biometric)
+  // implementation(libs.androidx.biometric)
   implementation(libs.litert)
   implementation(libs.kotlinx.serialization.json)
   // implementation(libs.coil.compose)

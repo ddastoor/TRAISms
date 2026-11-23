@@ -1,9 +1,14 @@
 package com.example.ui.messages
 
+import android.Manifest
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -28,13 +33,17 @@ import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.DeleteForever
 import androidx.compose.material.icons.outlined.DeleteSweep
+import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material.icons.outlined.Science
 import androidx.compose.material.icons.outlined.Search
+import androidx.compose.material.icons.outlined.Sms
 import androidx.compose.material.icons.outlined.Sync
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -79,6 +88,7 @@ import com.example.data.db.CategoryUnreadCount
 import com.example.data.db.SmsCategory
 import com.example.data.db.ThreadSummary
 import com.example.data.sms.SyncProgressState
+import com.example.data.sms.SystemSmsHelper
 import com.example.ui.common.GlobalDeleteAllMessagesDialog
 import com.example.ui.common.MoveSenderCategoryBottomSheet
 import com.example.ui.common.ThreadRowItem
@@ -97,11 +107,16 @@ fun MessagesScreen(
     leftSwipeAction: LeftSwipeAction,
     activeRegionBadge: String,
     syncProgress: SyncProgressState,
+    isDefaultSmsApp: Boolean,
+    showSetupBanner: Boolean,
     showEmulatorDemoBanner: Boolean,
+    systemSmsHelper: SystemSmsHelper,
     onSelectCategory: (SmsCategory) -> Unit,
     onSearchQueryChange: (String) -> Unit,
     onOpenThread: (String) -> Unit,
     onOpenCompose: () -> Unit,
+    onOpenOnboardingGuide: () -> Unit,
+    onDismissSetupBanner: () -> Unit,
     onArchiveThread: (String, Boolean) -> Unit,
     onDeleteThread: (String) -> Unit,
     onAssignSenderCategory: (threadKey: String, senderTitle: String, target: SmsCategory, alwaysRule: Boolean) -> Unit,
@@ -114,6 +129,27 @@ fun MessagesScreen(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
+
+    val permissionsLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestMultiplePermissions()
+    ) {
+        onTriggerDeviceSync()
+    }
+
+    val roleLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) {
+        val perms = buildList {
+            add(Manifest.permission.READ_SMS)
+            add(Manifest.permission.SEND_SMS)
+            add(Manifest.permission.RECEIVE_SMS)
+            add(Manifest.permission.READ_CONTACTS)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                add(Manifest.permission.POST_NOTIFICATIONS)
+            }
+        }.toTypedArray()
+        permissionsLauncher.launch(perms)
+    }
 
     var isSearchExpanded by remember { mutableStateOf(false) }
     var overflowExpanded by remember { mutableStateOf(false) }
@@ -193,6 +229,17 @@ fun MessagesScreen(
                                         onTriggerDeviceSync()
                                     },
                                     modifier = Modifier.testTag("menu_sync_sms")
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Default SMS & Privacy Guide") },
+                                    leadingIcon = {
+                                        Icon(Icons.Outlined.Info, contentDescription = null)
+                                    },
+                                    onClick = {
+                                        overflowExpanded = false
+                                        onOpenOnboardingGuide()
+                                    },
+                                    modifier = Modifier.testTag("menu_open_onboarding")
                                 )
                                 DropdownMenuItem(
                                     text = {
@@ -343,12 +390,113 @@ fun MessagesScreen(
             )
         }
     ) { innerPadding ->
-        Box(
+        Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
                 .background(MaterialTheme.colorScheme.background)
         ) {
+            if (!isDefaultSmsApp && showSetupBanner && searchQuery.isBlank()) {
+                Card(
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+                    ),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                    shape = RoundedCornerShape(14.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 14.dp, vertical = 10.dp)
+                        .testTag("inline_default_sms_banner")
+                ) {
+                    Column(
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.padding(14.dp)
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Outlined.Sms,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = "Enable Default SMS & Offline Sync",
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                            IconButton(
+                                onClick = onDismissSetupBanner,
+                                modifier = Modifier.size(28.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Outlined.Close,
+                                    contentDescription = "Dismiss setup card",
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            }
+                        }
+
+                        Text(
+                            text = "Set TRAISms as Default SMS handler to import, categorize, and encrypt your messages 100% offline.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Button(
+                                onClick = {
+                                    val roleIntent = systemSmsHelper.createDefaultSmsRequestIntent()
+                                    if (roleIntent != null) {
+                                        roleLauncher.launch(roleIntent)
+                                    } else {
+                                        val perms = buildList {
+                                            add(Manifest.permission.READ_SMS)
+                                            add(Manifest.permission.SEND_SMS)
+                                            add(Manifest.permission.RECEIVE_SMS)
+                                            add(Manifest.permission.READ_CONTACTS)
+                                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                                                add(Manifest.permission.POST_NOTIFICATIONS)
+                                            }
+                                        }.toTypedArray()
+                                        permissionsLauncher.launch(perms)
+                                    }
+                                },
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .testTag("banner_set_default_sms_button")
+                            ) {
+                                Text("Set Default SMS")
+                            }
+
+                            OutlinedButton(
+                                onClick = onOpenOnboardingGuide,
+                                modifier = Modifier.testTag("banner_privacy_guide_button")
+                            ) {
+                                Text("Privacy Guide")
+                            }
+                        }
+                    }
+                }
+            }
+
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f)
+            ) {
             if (threads.isEmpty()) {
                 val style = selectedCategory.visualStyle()
                 Column(
@@ -463,6 +611,7 @@ fun MessagesScreen(
                         )
                     }
                 }
+            }
             }
         }
     }

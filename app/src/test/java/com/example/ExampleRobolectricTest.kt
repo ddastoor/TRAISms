@@ -163,12 +163,20 @@ class ExampleRobolectricTest {
     }
 
     @Test
-    fun `MainActivity launches cleanly without FLAG_SECURE blacking out streaming emulator`() {
+    fun `MainActivity launches cleanly with 4-tab BottomNavigationBar and crash-free role launcher`() {
         org.robolectric.Robolectric.buildActivity(MainActivity::class.java).use { controller ->
             controller.setup()
             val activity = controller.get()
             val hasFlagSecure = (activity.window.attributes.flags and android.view.WindowManager.LayoutParams.FLAG_SECURE) != 0
             assertEquals(false, hasFlagSecure)
+
+            // Verify ActivityResultRegistry launches 32-bit request codes cleanly without FragmentActivity 16-bit crash
+            val testLauncher = activity.activityResultRegistry.register(
+                "test_role_request",
+                androidx.activity.result.contract.ActivityResultContracts.RequestMultiplePermissions()
+            ) { }
+            testLauncher.launch(arrayOf(android.Manifest.permission.READ_SMS))
+            testLauncher.unregister()
         }
     }
 }
