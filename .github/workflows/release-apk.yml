@@ -10,12 +10,20 @@ on:
   workflow_dispatch:
     inputs:
       release_tag:
-        description: 'Release tag to publish (e.g. v1.0.0)'
+        description: 'Optional release tag override (e.g. v1.0.0; defaults to version.properties)'
         required: false
-        default: 'v1.0.0'
+        default: ''
+      version_code:
+        description: 'Optional integer versionCode override (defaults to version.properties)'
+        required: false
+        default: ''
 
 permissions:
   contents: write
+
+concurrency:
+  group: release-apk-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
   build-and-release:
@@ -24,19 +32,70 @@ jobs:
 
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Resolve App Version & Release Tag
+        id: version
+        env:
+          INPUT_RELEASE_TAG: ${{ github.event.inputs.release_tag }}
+          INPUT_VERSION_CODE: ${{ github.event.inputs.version_code }}
+        run: |
+          PROP_VERSION_NAME="$(grep -E '^VERSION_NAME=' version.properties | cut -d'=' -f2- | tr -d '\r' | xargs)"
+          PROP_VERSION_CODE="$(grep -E '^VERSION_CODE=' version.properties | cut -d'=' -f2- | tr -d '\r' | xargs)"
+
+          if [[ -z "$PROP_VERSION_NAME" || -z "$PROP_VERSION_CODE" ]]; then
+            echo "ERROR: version.properties must define VERSION_NAME and VERSION_CODE."
+            exit 1
+          fi
+
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            TAG_NAME="${GITHUB_REF#refs/tags/}"
+            VERSION_NAME="${TAG_NAME#v}"
+          elif [[ -n "$INPUT_RELEASE_TAG" ]]; then
+            if [[ ! "$INPUT_RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[A-Za-z0-9.]+)?$ ]]; then
+              echo "ERROR: release_tag must match vMAJOR.MINOR.PATCH (got '${INPUT_RELEASE_TAG}')."
+              exit 1
+            fi
+            TAG_NAME="$INPUT_RELEASE_TAG"
+            VERSION_NAME="${TAG_NAME#v}"
+          else
+            VERSION_NAME="$PROP_VERSION_NAME"
+            TAG_NAME="v${VERSION_NAME}"
+          fi
+
+          if [[ -n "$INPUT_VERSION_CODE" ]]; then
+            if [[ ! "$INPUT_VERSION_CODE" =~ ^[0-9]+$ ]]; then
+              echo "ERROR: version_code must be a positive integer (got '${INPUT_VERSION_CODE}')."
+              exit 1
+            fi
+            VERSION_CODE="$INPUT_VERSION_CODE"
+          else
+            VERSION_CODE="$PROP_VERSION_CODE"
+          fi
+
+          echo "Resolved release tag: ${TAG_NAME} (versionName=${VERSION_NAME}, versionCode=${VERSION_CODE})"
+          echo "tag_name=${TAG_NAME}" >> "$GITHUB_OUTPUT"
+          echo "version_name=${VERSION_NAME}" >> "$GITHUB_OUTPUT"
+          echo "version_code=${VERSION_CODE}" >> "$GITHUB_OUTPUT"
 
       - name: Set up JDK 21
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: 'temurin'
           java-version: '21'
 
       - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
+        uses: android-actions/setup-android@v4
+
+      - name: Accept Android SDK Licenses
+        run: |
+          set +o pipefail
+          yes | sdkmanager --licenses >/dev/null 2>&1 || true
 
       - name: Set up Gradle 9.3.1
-        uses: gradle/actions/setup-gradle@v4
+        uses: gradle/actions/setup-gradle@v6
         with:
           gradle-version: '9.3.1'
 
@@ -83,57 +142,118 @@ jobs:
           fi
 
       - name: Run Unit & Robolectric Verification Suite
-        run: gradle :app:testDebugUnitTest
+        run: >-
+          gradle :app:testDebugUnitTest
+          -PversionName="${{ steps.version.outputs.version_name }}"
+          -PversionCode="${{ steps.version.outputs.version_code }}"
 
       - name: Assemble Signed Release & Debug APKs
-        run: gradle :app:assembleRelease :app:assembleDebug
+        run: >-
+          gradle :app:assembleRelease :app:assembleDebug
+          -PversionName="${{ steps.version.outputs.version_name }}"
+          -PversionCode="${{ steps.version.outputs.version_code }}"
 
-      - name: Verify Zero Internet Permissions in Merged Release Manifest
+      - name: Verify APK Version, Package ID & Zero Network Permissions
+        env:
+          VERSION_NAME: ${{ steps.version.outputs.version_name }}
+          VERSION_CODE: ${{ steps.version.outputs.version_code }}
         run: |
-          if grep -q "android.permission.INTERNET" app/build/intermediates/merged_manifests/release/processReleaseManifest/AndroidManifest.xml; then
-            echo "ERROR: INTERNET permission detected in release manifest!"
+          AAPT2="$(find "${ANDROID_HOME}/build-tools" -name aapt2 -type f | sort -V | tail -n 1)"
+          if [ -z "$AAPT2" ]; then
+            echo "ERROR: aapt2 not found under ${ANDROID_HOME}/build-tools"
             exit 1
           fi
-          echo "Verified zero INTERNET permissions in merged release manifest."
 
-      - name: Stage Release Artifacts & SHA-256 Checksums
+          RELEASE_APK="app/build/outputs/apk/release/app-release.apk"
+          BADGING="$("$AAPT2" dump badging "$RELEASE_APK")"
+          echo "$BADGING" | head -n 5
+
+          echo "$BADGING" | grep -q "name='com.traisms.app'" || { echo "ERROR: Unexpected package ID in release APK"; exit 1; }
+          echo "$BADGING" | grep -q "versionName='${VERSION_NAME}'" || { echo "ERROR: Release APK versionName does not match ${VERSION_NAME}"; exit 1; }
+          echo "$BADGING" | grep -q "versionCode='${VERSION_CODE}'" || { echo "ERROR: Release APK versionCode does not match ${VERSION_CODE}"; exit 1; }
+
+          PERMS="$("$AAPT2" dump permissions "$RELEASE_APK")"
+          echo "$PERMS"
+          if echo "$PERMS" | grep -q "android.permission.INTERNET"; then
+            echo "ERROR: INTERNET permission detected in release APK!"
+            exit 1
+          fi
+          if echo "$PERMS" | grep -q "android.permission.ACCESS_NETWORK_STATE"; then
+            echo "ERROR: ACCESS_NETWORK_STATE permission detected in release APK!"
+            exit 1
+          fi
+          echo "Verified release APK v${VERSION_NAME} (code ${VERSION_CODE}), package com.traisms.app, and zero network permissions."
+
+      - name: Stage Versioned Release Artifacts & SHA-256 Checksums
+        env:
+          VERSION_NAME: ${{ steps.version.outputs.version_name }}
         run: |
           mkdir -p release-dist
-          cp app/build/outputs/apk/release/app-release.apk release-dist/TRAISms-v1.0.0-release.apk
-          cp app/build/outputs/apk/debug/app-debug.apk release-dist/TRAISms-v1.0.0-debug.apk
+          RELEASE_NAME="TRAISms-v${VERSION_NAME}-release.apk"
+          DEBUG_NAME="TRAISms-v${VERSION_NAME}-debug.apk"
+          cp app/build/outputs/apk/release/app-release.apk "release-dist/${RELEASE_NAME}"
+          cp app/build/outputs/apk/debug/app-debug.apk "release-dist/${DEBUG_NAME}"
           cd release-dist
-          sha256sum TRAISms-v1.0.0-release.apk TRAISms-v1.0.0-debug.apk > SHA256SUMS.txt
+          sha256sum "${RELEASE_NAME}" "${DEBUG_NAME}" > SHA256SUMS.txt
           cat SHA256SUMS.txt
 
       - name: Upload APK Workflow Artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
-          name: TRAISms-v1.0.0-APKs
+          name: TRAISms-v${{ steps.version.outputs.version_name }}-APKs
           path: release-dist/*
 
-      - name: Determine Release Tag
-        id: tag_meta
+      - name: Publish GitHub Release Page with Versioned APK Assets
         env:
-          INPUT_RELEASE_TAG: ${{ github.event.inputs.release_tag }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG_NAME: ${{ steps.version.outputs.tag_name }}
+          VERSION_NAME: ${{ steps.version.outputs.version_name }}
+          VERSION_CODE: ${{ steps.version.outputs.version_code }}
         run: |
-          if [[ "$GITHUB_REF" == refs/tags/* ]]; then
-            TAG_NAME="${GITHUB_REF#refs/tags/}"
-          elif [[ -n "$INPUT_RELEASE_TAG" && "$INPUT_RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[A-Za-z0-9.]+)?$ ]]; then
-            TAG_NAME="$INPUT_RELEASE_TAG"
-          else
-            TAG_NAME="v1.0.0"
-          fi
-          echo "tag_name=${TAG_NAME}" >> "$GITHUB_OUTPUT"
+          RELEASE_APK="release-dist/TRAISms-v${VERSION_NAME}-release.apk"
+          DEBUG_APK="release-dist/TRAISms-v${VERSION_NAME}-debug.apk"
+          CHECKSUMS="release-dist/SHA256SUMS.txt"
+          RELEASE_TITLE="TRAISms ${TAG_NAME} — 100% Offline Security-Hardened Android SMS"
 
-      - name: Create or Update GitHub Release Page with APK Assets
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ steps.tag_meta.outputs.tag_name }}
-          name: "TRAISms ${{ steps.tag_meta.outputs.tag_name }} — 100% Offline Security-Hardened Android SMS"
-          body_path: RELEASE_NOTES.md
-          draft: false
-          prerelease: false
-          files: |
-            release-dist/TRAISms-v1.0.0-release.apk
-            release-dist/TRAISms-v1.0.0-debug.apk
-            release-dist/SHA256SUMS.txt
+          {
+            cat RELEASE_NOTES.md
+            echo ""
+            echo "---"
+            echo ""
+            echo "## Build & Verification Metadata"
+            echo ""
+            echo "| Field | Value |"
+            echo "| :--- | :--- |"
+            echo "| **Release Tag** | \`${TAG_NAME}\` |"
+            echo "| **App Version** | \`${VERSION_NAME}\` (\`versionCode ${VERSION_CODE}\`) |"
+            echo "| **Package ID** | \`com.traisms.app\` |"
+            echo "| **Commit** | \`${GITHUB_SHA}\` |"
+            echo "| **Release APK** | \`TRAISms-v${VERSION_NAME}-release.apk\` |"
+            echo "| **Debug APK** | \`TRAISms-v${VERSION_NAME}-debug.apk\` |"
+            echo ""
+            echo "### SHA-256 Checksums"
+            echo '```text'
+            cat "${CHECKSUMS}"
+            echo '```'
+          } > release-dist/RELEASE_BODY.md
+
+          if gh release view "${TAG_NAME}" >/dev/null 2>&1; then
+            if [[ "${GITHUB_REF}" != refs/tags/* ]]; then
+              git tag -f "${TAG_NAME}" "${GITHUB_SHA}"
+              git push origin "refs/tags/${TAG_NAME}" --force
+            fi
+            gh release upload "${TAG_NAME}" "${RELEASE_APK}" "${DEBUG_APK}" "${CHECKSUMS}" --clobber
+            gh release edit "${TAG_NAME}" \
+              --title "${RELEASE_TITLE}" \
+              --notes-file release-dist/RELEASE_BODY.md \
+              --latest
+          else
+            gh release create "${TAG_NAME}" \
+              "${RELEASE_APK}" \
+              "${DEBUG_APK}" \
+              "${CHECKSUMS}" \
+              --title "${RELEASE_TITLE}" \
+              --notes-file release-dist/RELEASE_BODY.md \
+              --target "${GITHUB_SHA}" \
+              --latest
+          fi

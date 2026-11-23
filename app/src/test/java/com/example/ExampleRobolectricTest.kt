@@ -32,8 +32,11 @@ class ExampleRobolectricTest {
     }
 
     @Test
-    fun `verify TRAISms app_name resource`() {
+    fun `verify TRAISms app_name resource and semantic version metadata`() {
         assertEquals("TRAISms", context.getString(R.string.app_name))
+        assertEquals("com.traisms.app", BuildConfig.APPLICATION_ID)
+        assertEquals(true, Regex("^\\d+\\.\\d+\\.\\d+(-[A-Za-z0-9.]+)?$").matches(BuildConfig.VERSION_NAME))
+        assertEquals(true, BuildConfig.VERSION_CODE >= 1)
     }
 
     @Test

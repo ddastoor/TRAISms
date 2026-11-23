@@ -1,4 +1,6 @@
 import com.google.gms.googleservices.GoogleServicesPlugin.MissingGoogleServicesStrategy
+import java.io.StringReader
+import java.util.Properties
 
 plugins {
   alias(libs.plugins.android.application)
@@ -9,6 +11,23 @@ plugins {
   alias(libs.plugins.google.services)
 }
 
+val versionPropsText = providers.fileContents(
+  rootProject.layout.projectDirectory.file("version.properties")
+).asText.orNull.orEmpty()
+val versionProps = Properties().apply {
+  if (versionPropsText.isNotEmpty()) {
+    load(StringReader(versionPropsText))
+  }
+}
+val appVersionName = providers.gradleProperty("versionName").orNull
+  ?.trim()?.takeIf { it.isNotEmpty() }
+  ?: versionProps.getProperty("VERSION_NAME")?.trim()
+  ?: "1.0.0"
+val appVersionCode = providers.gradleProperty("versionCode").orNull
+  ?.trim()?.toIntOrNull()
+  ?: versionProps.getProperty("VERSION_CODE")?.trim()?.toIntOrNull()
+  ?: 1
+
 android {
   namespace = "com.example"
   compileSdk { version = release(36) { minorApiLevel = 1 } }
@@ -17,8 +36,8 @@ android {
     applicationId = "com.traisms.app"
     minSdk = 24
     targetSdk = 36
-    versionCode = 1
-    versionName = "1.0.0"
+    versionCode = appVersionCode
+    versionName = appVersionName
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }

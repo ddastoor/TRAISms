@@ -2,7 +2,7 @@
 
 **Production-grade, security-hardened, 100% offline Android SMS organizer** built with Kotlin, Jetpack Compose, Material Design 3, SQLCipher, Google Tink, Jetpack DataStore, LiteRT, and WorkManager.
 
-> **Latest Release & APK Download:** Visit the [**GitHub Releases**](../../releases/latest) page to download `TRAISms-v1.0.0-release.apk` and `SHA256SUMS.txt`.
+> **Latest Release & APK Download:** Visit the [**GitHub Releases**](https://github.com/ddastoor/TRAISms/releases/latest) page to download the latest versioned `TRAISms-v<version>-release.apk` and `SHA256SUMS.txt`.
 
 ---
 
@@ -54,10 +54,13 @@ app/src/main/java/com/example/
 
 ---
 
-## Automated GitHub Release Workflow
+## Versioning & Automated GitHub Release Workflow
+
+App versioning is defined in a single source of truth at [`version.properties`](version.properties) (`VERSION_NAME` and `VERSION_CODE`), which drives both Gradle (`BuildConfig.VERSION_NAME`, `BuildConfig.VERSION_CODE`, and the APK manifest) and GitHub Releases.
 
 This repository includes [`.github/workflows/release-apk.yml`](.github/workflows/release-apk.yml), which automatically:
-1. Runs unit and Robolectric verification tests (`:app:testDebugUnitTest`).
-2. Builds signed release and debug APKs (`TRAISms-v1.0.0-release.apk` and `TRAISms-v1.0.0-debug.apk`).
-3. Generates `SHA256SUMS.txt`.
-4. Publishes the formatted release page from [`RELEASE_NOTES.md`](RELEASE_NOTES.md) directly to **GitHub Releases** whenever pushed to `main`/`master`, tagged `v*`, or triggered manually from the **Actions** tab.
+1. Reads `VERSION_NAME` and `VERSION_CODE` from `version.properties` (or a pushed `v*` tag / manual override).
+2. Runs unit and Robolectric verification tests (`:app:testDebugUnitTest`).
+3. Builds signed release and debug APKs (`TRAISms-v<version>-release.apk` and `TRAISms-v<version>-debug.apk`).
+4. Verifies via `aapt2` that the release APK embeds the exact matching `versionName`/`versionCode` and contains zero network permissions.
+5. Generates `SHA256SUMS.txt` and publishes the formatted release page from [`RELEASE_NOTES.md`](RELEASE_NOTES.md) directly to [**GitHub Releases**](https://github.com/ddastoor/TRAISms/releases) whenever pushed to `main`/`master`, tagged `v*`, or triggered manually from the **Actions** tab.

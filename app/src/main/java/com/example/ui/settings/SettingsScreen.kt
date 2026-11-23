@@ -30,6 +30,7 @@ import androidx.compose.material.icons.outlined.Backup
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.DeleteForever
 import androidx.compose.material.icons.outlined.Fingerprint
+import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Public
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Security
@@ -499,6 +500,27 @@ fun SettingsScreen(
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(stringResource(R.string.delete_all_in_app))
                         }
+                    }
+                }
+
+                // 8. ABOUT & APP VERSION CARD
+                SettingsGroupCard(
+                    icon = Icons.Outlined.Info,
+                    title = "About TRAISms",
+                    subtitle = "App version and offline build details"
+                ) {
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text(
+                            text = "Version ${com.example.BuildConfig.VERSION_NAME} (Build ${com.example.BuildConfig.VERSION_CODE})",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.SemiBold,
+                            modifier = Modifier.testTag("settings_app_version_text")
+                        )
+                        Text(
+                            text = "Package: ${com.example.BuildConfig.APPLICATION_ID} • 100% Offline",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     }
                 }
 
