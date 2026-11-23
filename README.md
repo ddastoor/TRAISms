@@ -3,6 +3,11 @@
 **Production-grade, security-hardened, 100% offline Android SMS organizer** built with Kotlin, Jetpack Compose, Material Design 3, SQLCipher, Google Tink, Jetpack DataStore, LiteRT, and WorkManager.
 
 > **Latest Release & APK Download:** Visit the [**GitHub Releases**](https://github.com/ddastoor/TRAISms/releases/latest) page to download the latest versioned `TRAISms-v<version>-release.apk` and `SHA256SUMS.txt`.
+>
+> **Android 15+ / Pixel Sideloading Note:** Android 15/16's *Enhanced Confirmation Mode* blocks sideloaded APKs from becoming the Default SMS App until you allow restricted settings. If Android denies the request:
+> 1. Tap **Open App Info** in TRAISms (or open **Settings → Apps → TRAISms**).
+> 2. Tap the **⋮** menu (top-right) → **Allow restricted settings** and verify with your PIN or fingerprint *(note: on Android 13–16, the **⋮** menu often appears only after tapping **Set TRAISms as Default SMS App** once and seeing Android's blocked dialog)*.
+> 3. Return to **TRAISms** and tap **Set TRAISms as Default SMS App** again (or select TRAISms under **Settings → Apps → Default apps → SMS app**).
 
 ---
 
