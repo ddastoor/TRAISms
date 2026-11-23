@@ -205,7 +205,8 @@ fun MoveSenderCategoryBottomSheet(
             Text(
                 text = senderTitle,
                 style = MaterialTheme.typography.labelLarge.copy(fontFamily = JetBrainsMonoFamily),
-                color = MaterialTheme.colorScheme.secondary
+                color = MaterialTheme.colorScheme.secondary,
+                modifier = Modifier.testTag("move_category_sender_title")
             )
             Spacer(modifier = Modifier.height(12.dp))
 
@@ -255,7 +256,8 @@ fun MoveSenderCategoryBottomSheet(
                         }
                         RadioButton(
                             selected = isSelected,
-                            onClick = { selectedCategory = category }
+                            onClick = { selectedCategory = category },
+                            modifier = Modifier.testTag("sheet_radio_${category.name.lowercase(Locale.ROOT)}")
                         )
                     }
                 }

@@ -26,6 +26,13 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
+data class AssignCategoryRequest(
+    val threadKey: String,
+    val rawAddress: String,
+    val senderTitle: String,
+    val currentCategory: SmsCategory
+)
+
 @OptIn(ExperimentalCoroutinesApi::class)
 class MainViewModel(
     private val container: AppContainer
@@ -57,6 +64,9 @@ class MainViewModel(
 
     private val _isBackupInProgress = MutableStateFlow(false)
     val isBackupInProgress: StateFlow<Boolean> = _isBackupInProgress.asStateFlow()
+
+    private val _pendingAssignCategory = MutableStateFlow<AssignCategoryRequest?>(null)
+    val pendingAssignCategory: StateFlow<AssignCategoryRequest?> = _pendingAssignCategory.asStateFlow()
 
     val syncProgress: StateFlow<SyncProgressState> = repository.syncProgress
 
@@ -179,6 +189,14 @@ class MainViewModel(
         viewModelScope.launch {
             repository.setThreadsArchived(threadKeys, archived)
         }
+    }
+
+    fun requestAssignCategory(request: AssignCategoryRequest) {
+        _pendingAssignCategory.value = request
+    }
+
+    fun dismissAssignCategory() {
+        _pendingAssignCategory.value = null
     }
 
     fun assignSenderCategory(
