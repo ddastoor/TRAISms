@@ -1,7 +1,16 @@
 package com.example
 
+import android.Manifest
+import android.app.Application
+import android.content.ContentProvider
+import android.content.ContentValues
 import android.content.Context
 import android.content.pm.PackageInstaller
+import android.content.pm.ProviderInfo
+import android.database.Cursor
+import android.database.MatrixCursor
+import android.net.Uri
+import android.provider.ContactsContract
 import android.provider.Settings
 import androidx.test.core.app.ApplicationProvider
 import com.example.data.crypto.BackupCryptoEngine
@@ -9,6 +18,7 @@ import com.example.data.crypto.BackupMessageRecord
 import com.example.data.crypto.BackupSenderRuleRecord
 import com.example.data.crypto.EncryptedBackupPayload
 import com.example.data.db.SmsCategory
+import com.example.data.sms.ContactLookupCache
 import com.example.data.sms.SystemSmsHelper
 import com.example.domain.classifier.OfflineSmsMlClassifier
 import com.example.domain.classifier.RegionProfile
@@ -23,6 +33,7 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows
 import org.robolectric.annotation.Config
+import org.robolectric.shadows.ShadowContentResolver
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])
@@ -245,5 +256,52 @@ class ExampleRobolectricTest {
         assertEquals("Open App Info", context.getString(R.string.restricted_settings_open_app_info))
         assertEquals("Open Default Apps", context.getString(R.string.restricted_settings_open_default_apps))
         assertTrue(context.getString(R.string.restricted_settings_tip).contains("Allow restricted settings"))
+    }
+
+    @Test
+    fun `ContactLookupCache matches formatted phone numbers by raw digits without false name-digit matches`() {
+        val cache = ContactLookupCache(context)
+        // Without READ_CONTACTS permission, search safely returns empty
+        assertTrue(cache.searchContacts("").isEmpty())
+
+        val testContacts = listOf(
+            "Alice Sharma" to "+91 98765 43210",
+            "Bob Patel" to "(415) 555-2671",
+            "John 2" to "+1 202-555-0148"
+        )
+        val provider = object : ContentProvider() {
+            override fun onCreate(): Boolean = true
+            override fun query(
+                uri: Uri,
+                projection: Array<out String>?,
+                selection: String?,
+                selectionArgs: Array<out String>?,
+                sortOrder: String?
+            ): Cursor {
+                val cursor = MatrixCursor(
+                    arrayOf(
+                        ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME,
+                        ContactsContract.CommonDataKinds.Phone.NUMBER
+                    )
+                )
+                testContacts.forEach { (name, number) -> cursor.addRow(arrayOf(name, number)) }
+                return cursor
+            }
+
+            override fun getType(uri: Uri): String? = null
+            override fun insert(uri: Uri, values: ContentValues?): Uri? = null
+            override fun delete(uri: Uri, selection: String?, selectionArgs: Array<out String>?): Int = 0
+            override fun update(uri: Uri, values: ContentValues?, selection: String?, selectionArgs: Array<out String>?): Int = 0
+        }
+        provider.attachInfo(context, ProviderInfo().apply { authority = ContactsContract.AUTHORITY })
+        ShadowContentResolver.registerProviderInternal(ContactsContract.AUTHORITY, provider)
+        Shadows.shadowOf(context as Application).grantPermissions(Manifest.permission.READ_CONTACTS)
+
+        assertEquals(3, cache.searchContacts("").size)
+        assertEquals(listOf("Alice Sharma"), cache.searchContacts("alice").map { it.displayName })
+        assertEquals(listOf("Alice Sharma"), cache.searchContacts("9876543210").map { it.displayName })
+        assertEquals(listOf("Alice Sharma"), cache.searchContacts("98765-43210").map { it.displayName })
+        assertEquals(listOf("Bob Patel"), cache.searchContacts("415555").map { it.displayName })
+        assertEquals(listOf("John 2"), cache.searchContacts("john 2").map { it.displayName })
     }
 }

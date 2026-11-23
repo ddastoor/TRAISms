@@ -44,6 +44,9 @@
     <string name="reply_placeholder">Write an SMS message…</string>
     <string name="send_sms_cd">Send SMS</string>
     <string name="recipient_label">To (Name or Phone Number)</string>
+    <string name="clear_recipient_cd">Clear recipient</string>
+    <string name="compose_send_directly_to">Send directly to %1$s</string>
+    <string name="compose_direct_recipient_subtitle">Tap to write your message below</string>
     <string name="delete_message_confirm">Delete this message permanently?</string>
 
     <!-- Archive -->

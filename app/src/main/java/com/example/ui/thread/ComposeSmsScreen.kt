@@ -21,9 +21,12 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -45,13 +48,17 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import com.example.R
 import com.example.data.sms.ContactLookupCache
@@ -75,9 +82,10 @@ fun ComposeSmsScreen(
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
 
-    var recipient by remember(initialRecipient) { mutableStateOf(initialRecipient) }
-    var messageBody by remember(initialBody) { mutableStateOf(initialBody) }
+    var recipient by rememberSaveable(initialRecipient) { mutableStateOf(initialRecipient) }
+    var messageBody by rememberSaveable(initialBody) { mutableStateOf(initialBody) }
     var contactSuggestions by remember { mutableStateOf<List<SimpleContact>>(emptyList()) }
+    val bodyFocusRequester = remember { FocusRequester() }
 
     LaunchedEffect(recipient) {
         contactSuggestions = withContext(Dispatchers.IO) {
@@ -124,26 +132,27 @@ fun ComposeSmsScreen(
                 shadowElevation = 4.dp,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .navigationBarsPadding()
                     .imePadding()
             ) {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 12.dp)
+                        .navigationBarsPadding()
+                        .padding(horizontal = 16.dp, vertical = 8.dp)
                 ) {
                     OutlinedTextField(
                         value = messageBody,
                         onValueChange = { messageBody = it },
                         label = { Text(stringResource(R.string.reply_placeholder)) },
-                        minLines = 2,
-                        maxLines = 5,
+                        minLines = 1,
+                        maxLines = 4,
                         shape = RoundedCornerShape(14.dp),
                         modifier = Modifier
                             .fillMaxWidth()
+                            .focusRequester(bodyFocusRequester)
                             .testTag("compose_body_input")
                     )
-                    Spacer(modifier = Modifier.height(8.dp))
+                    Spacer(modifier = Modifier.height(6.dp))
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -156,7 +165,7 @@ fun ComposeSmsScreen(
                         )
                         Button(
                             onClick = {
-                                onSendSms(recipient, messageBody) { result ->
+                                onSendSms(recipient.trim(), messageBody) { result ->
                                     if (result.isFailure) {
                                         scope.launch {
                                             snackbarHostState.showSnackbar(
@@ -194,10 +203,29 @@ fun ComposeSmsScreen(
                 singleLine = true,
                 label = { Text(stringResource(R.string.recipient_label)) },
                 leadingIcon = { Icon(Icons.Outlined.Person, contentDescription = null) },
+                trailingIcon = if (recipient.isNotEmpty()) {
+                    {
+                        IconButton(
+                            onClick = { recipient = "" },
+                            modifier = Modifier.testTag("compose_recipient_clear")
+                        ) {
+                            Icon(
+                                imageVector = Icons.Outlined.Close,
+                                contentDescription = stringResource(R.string.clear_recipient_cd)
+                            )
+                        }
+                    }
+                } else {
+                    null
+                },
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
+                keyboardActions = KeyboardActions(
+                    onNext = { runCatching { bodyFocusRequester.requestFocus() } }
+                ),
                 shape = RoundedCornerShape(12.dp),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 12.dp)
+                    .padding(horizontal = 16.dp, vertical = 8.dp)
                     .testTag("compose_recipient_input")
             )
 
@@ -212,6 +240,7 @@ fun ComposeSmsScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .weight(1f)
+                        .testTag("compose_contacts_list")
                 ) {
                     items(
                         items = contactSuggestions,
@@ -221,7 +250,10 @@ fun ComposeSmsScreen(
                             verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clickable { recipient = contact.phoneNumber }
+                                .clickable {
+                                    recipient = contact.phoneNumber
+                                    runCatching { bodyFocusRequester.requestFocus() }
+                                }
                                 .padding(horizontal = 16.dp, vertical = 10.dp)
                         ) {
                             Box(
@@ -253,6 +285,42 @@ fun ComposeSmsScreen(
                         HorizontalDivider(
                             color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
                             modifier = Modifier.padding(start = 66.dp)
+                        )
+                    }
+                }
+            } else if (recipient.isNotBlank()) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { runCatching { bodyFocusRequester.requestFocus() } }
+                        .padding(horizontal = 16.dp, vertical = 12.dp)
+                        .testTag("compose_direct_recipient_hint")
+                ) {
+                    Box(
+                        contentAlignment = Alignment.Center,
+                        modifier = Modifier
+                            .size(38.dp)
+                            .clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.secondaryContainer)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.Person,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Column {
+                        Text(
+                            text = stringResource(R.string.compose_send_directly_to, recipient.trim()),
+                            style = MaterialTheme.typography.titleSmall
+                        )
+                        Text(
+                            text = stringResource(R.string.compose_direct_recipient_subtitle),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 }

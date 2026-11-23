@@ -202,7 +202,6 @@ fun ThreadDetailScreen(
                 shadowElevation = 4.dp,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .navigationBarsPadding()
                     .imePadding()
             ) {
                 if (canReply) {
@@ -210,6 +209,7 @@ fun ThreadDetailScreen(
                         verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier
                             .fillMaxWidth()
+                            .navigationBarsPadding()
                             .padding(horizontal = 12.dp, vertical = 10.dp)
                     ) {
                         OutlinedTextField(
@@ -260,6 +260,7 @@ fun ThreadDetailScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .background(MaterialTheme.colorScheme.surfaceContainerLow)
+                            .navigationBarsPadding()
                             .padding(horizontal = 16.dp, vertical = 14.dp)
                     ) {
                         Text(

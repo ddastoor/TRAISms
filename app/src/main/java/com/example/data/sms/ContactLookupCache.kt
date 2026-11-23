@@ -114,11 +114,14 @@ class ContactLookupCache(private val context: Context) {
         if (!hasContactsPermission()) return emptyList()
         warmCache(forceRefresh = false)
         val q = query.trim().lowercase(Locale.ROOT)
+        val qDigits = q.filter { it.isDigit() }
+        val matchNormalizedDigits = qDigits.isNotEmpty() && q.none { it.isLetter() }
         synchronized(lock) {
             if (q.isEmpty()) return allContactsList.take(25)
-            return allContactsList.filter {
-                it.displayName.lowercase(Locale.ROOT).contains(q) ||
-                    it.phoneNumber.contains(q)
+            return allContactsList.filter { contact ->
+                contact.displayName.lowercase(Locale.ROOT).contains(q) ||
+                    contact.phoneNumber.lowercase(Locale.ROOT).contains(q) ||
+                    (matchNormalizedDigits && contact.phoneNumber.filter { it.isDigit() }.contains(qDigits))
             }.take(20)
         }
     }

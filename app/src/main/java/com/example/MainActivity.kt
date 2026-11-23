@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
@@ -551,7 +552,7 @@ fun TraiSmsPrimaryApp(
             }
         } else {
             Scaffold(
-                contentWindowInsets = WindowInsets.safeDrawing,
+                contentWindowInsets = WindowInsets(0, 0, 0, 0),
                 bottomBar = {
                     if (isTopLevelDestination) {
                         BottomNavigationBar(
@@ -563,7 +564,11 @@ fun TraiSmsPrimaryApp(
                     }
                 }
             ) { scaffoldPadding ->
-                navHostComposable(Modifier.padding(scaffoldPadding))
+                navHostComposable(
+                    Modifier
+                        .padding(scaffoldPadding)
+                        .consumeWindowInsets(scaffoldPadding)
+                )
             }
         }
     }
