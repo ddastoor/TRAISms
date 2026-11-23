@@ -1,0 +1,71 @@
+<resources>
+    <string name="app_name">TRAISms</string>
+
+    <!-- Navigation -->
+    <string name="nav_messages">Messages</string>
+    <string name="nav_archive">Archive</string>
+    <string name="nav_backup">Backup</string>
+    <string name="nav_settings">Settings</string>
+
+    <!-- Categories -->
+    <string name="cat_personal">Personal</string>
+    <string name="cat_transactional">Transactional</string>
+    <string name="cat_service">Service</string>
+    <string name="cat_otp">OTP</string>
+    <string name="cat_promotional">Promotional</string>
+    <string name="cat_government">Government</string>
+    <string name="cat_unknown">Unknown</string>
+    <string name="cat_other">Other</string>
+
+    <!-- Onboarding -->
+    <string name="onboarding_badge">100% OFFLINE • ZERO NETWORK ACCESS</string>
+    <string name="onboarding_title">Private, Instant SMS Organization</string>
+    <string name="onboarding_subtitle">TRAISms encrypts your messages locally with SQLCipher, blocks internet permissions at the OS manifest level, and automatically organizes TRAI headers, OTPs, and commercial texts on-device.</string>
+    <string name="onboarding_set_default">Set TRAISms as Default SMS App</string>
+    <string name="onboarding_grant_permissions">Grant SMS &amp; Contact Permissions</string>
+    <string name="onboarding_demo_seed">Preview Demo Inbox</string>
+    <string name="onboarding_continue_readonly">Continue to Inbox</string>
+
+    <!-- Inbox & Thread -->
+    <string name="search_messages_hint">Search sender, OTP, or message text…</string>
+    <string name="compose_new_sms">New Message</string>
+    <string name="copy_otp_chip">Copy %1$s</string>
+    <string name="otp_copied_toast">OTP %1$s copied to clipboard</string>
+    <string name="empty_category_title">No %1$s messages</string>
+    <string name="empty_category_subtitle">Incoming and imported messages matching %1$s rules appear here automatically.</string>
+    <string name="delete_all_in_tab">Delete all in %1$s</string>
+    <string name="delete_all_in_app">Delete All Messages in App</string>
+    <string name="move_sender_category_title">Move Sender Category</string>
+    <string name="always_move_sender_rule">Always move existing and future SMS from %1$s to this tab</string>
+    <string name="apply_category_button">Move Conversation</string>
+    <string name="sync_progress_label">Encrypting &amp; categorizing SMS (%1$d imported)…</string>
+
+    <!-- Thread & Compose -->
+    <string name="reply_placeholder">Write an SMS message…</string>
+    <string name="send_sms_cd">Send SMS</string>
+    <string name="recipient_label">To (Name or Phone Number)</string>
+    <string name="delete_message_confirm">Delete this message permanently?</string>
+
+    <!-- Archive -->
+    <string name="archive_empty_title">Archive is clean</string>
+    <string name="archive_empty_subtitle">Swipe left on any conversation in Messages to move it out of your active inbox.</string>
+    <string name="unarchive_action">Unarchive</string>
+
+    <!-- Backup -->
+    <string name="backup_title">Encrypted Drive Backup</string>
+    <string name="backup_step1_title">1. Google Drive Destination (SAF)</string>
+    <string name="backup_step1_helper">Tap below to open the Android system picker, choose Google Drive, switch to your preferred Google Account in the top-right corner, and save TRAISms_Encrypted_Backup.trai. Zero internet permission required in TRAISms.</string>
+    <string name="backup_choose_file_btn">Choose Google Account &amp; Drive Backup File</string>
+    <string name="backup_step2_title">2. Backup Encryption Passphrase</string>
+    <string name="backup_passphrase_hint">Enter strong encryption passphrase</string>
+    <string name="backup_save_passphrase">Save Passphrase</string>
+    <string name="backup_now_btn">Back Up Now</string>
+    <string name="restore_from_backup_btn">Restore from Backup</string>
+
+    <!-- Settings -->
+    <string name="settings_default_sms_active">Active Default SMS App</string>
+    <string name="settings_set_default_btn">Set as Default</string>
+    <string name="app_locked_title">TRAISms Locked</string>
+    <string name="app_locked_subtitle">Authenticate with biometrics or device PIN to view encrypted messages.</string>
+    <string name="unlock_button">Unlock Inbox</string>
+</resources>

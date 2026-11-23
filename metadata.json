@@ -1,0 +1,6 @@
+{
+  "name": "TRAISms",
+  "description": "Security-hardened 100% offline Android SMS organizer with TRAI header classification, local ML, SQLCipher encryption, and Google Drive SAF backup.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
