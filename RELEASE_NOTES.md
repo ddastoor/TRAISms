@@ -1,4 +1,4 @@
-# TRAISms v1.0.1 — Android 15/16 Restricted Settings Recovery & Release Hardening
+# TRAISms v1.0.2 — New Message Keyboard Inset Fix & Smarter Contact Search
 
 **Package ID:** `com.traisms.app`  
 **Minimum Android Version:** Android 7.0 (API 24) • **Target SDK:** Android 16 (API 36)  
@@ -8,13 +8,13 @@
 
 ## Download & Install
 
-Download **`TRAISms-v1.0.1-release.apk`** from the **Assets** section below:
+Download **`TRAISms-v1.0.2-release.apk`** from the **Assets** section below:
 
 1. Verify the file's SHA-256 checksum against `SHA256SUMS.txt`:
    ```bash
    sha256sum -c SHA256SUMS.txt
    ```
-2. Transfer `TRAISms-v1.0.1-release.apk` to your Android phone and open it to install.
+2. Transfer `TRAISms-v1.0.2-release.apk` to your Android phone and open it to install.
 3. Launch **TRAISms** and tap **Set TRAISms as Default SMS App** to import and encrypt your existing SMS inbox on-device.
 
 ### Installing on Android 15 / 16 (Google Pixel & Sideloaded APKs)
@@ -31,10 +31,16 @@ To unlock Default SMS access in 3 steps:
 
 ---
 
-## What's New in v1.0.1
+## What's New in v1.0.2
+
+- **New Message & Keyboard Inset Fix (Pixel / Android 15–16):** Eliminated double-applied `WindowInsets.ime` and `statusBars` insets across `MainActivity`, `ComposeSmsScreen`, and `ThreadDetailScreen` that previously collapsed the contact picker list when opening the soft keyboard.
+- **Smarter Contact Search & Compose UX:** Added digit-normalized phone matching in `ContactLookupCache` (matching formatted numbers like `+91 98765 43210` or `(415) 555-2671` when typing raw digits), a recipient clear button, `ImeAction.Next` / auto-focus to the message body on contact tap, and a direct-send row for unsaved numbers.
+- **Expanded Robolectric Verification:** Added Pixel 7 keyboard-open viewport (`411×526 dp`) Compose layout/interaction tests and formatted-number search tests.
+
+### Previous Highlights (v1.0.1)
 
 - **Pixel / Android 15+ Restricted Settings In-App Recovery:** Added built-in detection and recovery guidance in both **Onboarding** and **Settings** when Android blocks the Default SMS App role on sideloaded installs, including step-by-step instructions, one-tap **Open App Info**, and **Open Default Apps** shortcuts.
-- **Unified Versioning & Settings About Display:** Centralized `VERSION_NAME` (`1.0.1`) and `VERSION_CODE` (`2`) in `version.properties`, driving Gradle builds, the in-app **Settings → About TRAISms** version card, APK filenames, and GitHub Release tags in lockstep.
+- **Unified Versioning & Settings About Display:** Centralized `VERSION_NAME` and `VERSION_CODE` in `version.properties`, driving Gradle builds, the in-app **Settings → About TRAISms** version card, APK filenames, and GitHub Release tags in lockstep.
 
 ---
 
