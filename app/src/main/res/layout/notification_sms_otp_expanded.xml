@@ -1,0 +1,124 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical">
+
+    <TextView
+        android:id="@+id/notif_expanded_title"
+        style="@style/TextAppearance.Compat.Notification.Title"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:ellipsize="end"
+        android:singleLine="true" />
+
+    <TextView
+        android:id="@+id/notif_expanded_body"
+        style="@style/TextAppearance.Compat.Notification"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="2dp"
+        android:ellipsize="end"
+        android:maxLines="4" />
+
+    <FrameLayout
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:layout_marginTop="8dp"
+        android:background="#26808080" />
+
+    <LinearLayout
+        android:id="@+id/notif_otp_actions_row"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
+
+        <TextView
+            android:id="@+id/notif_btn_copy_otp"
+            style="@style/TextAppearance.Compat.Notification.Title"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1.15"
+            android:background="?android:attr/selectableItemBackground"
+            android:clickable="true"
+            android:ellipsize="end"
+            android:focusable="true"
+            android:gravity="center"
+            android:maxLines="2"
+            android:minHeight="36dp"
+            android:paddingStart="4dp"
+            android:paddingTop="6dp"
+            android:paddingEnd="4dp"
+            android:paddingBottom="6dp"
+            android:text="@string/notif_action_copy_otp"
+            android:textSize="12sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/notif_btn_archive"
+            style="@style/TextAppearance.Compat.Notification.Title"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1.0"
+            android:background="?android:attr/selectableItemBackground"
+            android:clickable="true"
+            android:ellipsize="end"
+            android:focusable="true"
+            android:fontFamily="sans-serif-medium"
+            android:gravity="center"
+            android:maxLines="2"
+            android:minHeight="36dp"
+            android:paddingStart="4dp"
+            android:paddingTop="6dp"
+            android:paddingEnd="4dp"
+            android:paddingBottom="6dp"
+            android:text="@string/notif_action_archive"
+            android:textSize="12sp" />
+
+        <TextView
+            android:id="@+id/notif_btn_assign_category"
+            style="@style/TextAppearance.Compat.Notification.Title"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1.75"
+            android:background="?android:attr/selectableItemBackground"
+            android:clickable="true"
+            android:ellipsize="end"
+            android:focusable="true"
+            android:fontFamily="sans-serif-medium"
+            android:gravity="center"
+            android:maxLines="2"
+            android:minHeight="36dp"
+            android:paddingStart="4dp"
+            android:paddingTop="6dp"
+            android:paddingEnd="4dp"
+            android:paddingBottom="6dp"
+            android:text="@string/notif_action_assign_category"
+            android:textSize="12sp" />
+
+        <TextView
+            android:id="@+id/notif_btn_delete"
+            style="@style/TextAppearance.Compat.Notification.Title"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="0.95"
+            android:background="?android:attr/selectableItemBackground"
+            android:clickable="true"
+            android:ellipsize="end"
+            android:focusable="true"
+            android:fontFamily="sans-serif-medium"
+            android:gravity="center"
+            android:maxLines="2"
+            android:minHeight="36dp"
+            android:paddingStart="4dp"
+            android:paddingTop="6dp"
+            android:paddingEnd="4dp"
+            android:paddingBottom="6dp"
+            android:text="@string/notif_action_delete"
+            android:textSize="12sp" />
+
+    </LinearLayout>
+
+</LinearLayout>

@@ -65,6 +65,11 @@
             </intent-filter>
         </receiver>
 
+        <!-- Internal BroadcastReceiver for SMS notification actions (Copy OTP, Archive, Delete) -->
+        <receiver
+            android:name=".data.sms.SmsNotificationActionReceiver"
+            android:exported="false" />
+
         <!-- Default SMS BroadcastReceiver for incoming MMS WAP Push -->
         <receiver
             android:name=".data.sms.MmsWapPushReceiver"

@@ -232,11 +232,13 @@ class SmsRepository(
             confidenceScore = outcome.confidenceScore,
             classificationSource = outcome.source
         )
-        smsDao.insertMessage(entity)
+        val insertedMessageId = smsDao.insertMessage(entity)
 
         if (!keepArchived) {
             notificationHelper.postIncomingSmsNotification(
+                messageId = insertedMessageId,
                 threadKey = threadKey,
+                rawAddress = cleanAddress,
                 senderTitle = contactName ?: cleanAddress,
                 body = body,
                 category = outcome.category,
@@ -366,6 +368,20 @@ class SmsRepository(
             systemSmsHelper.deleteFromSystemProvider(listOf(sysId))
         }
         smsDao.deleteMessageById(messageId)
+    }
+
+    suspend fun deleteNotificationMessage(
+        messageId: Long,
+        fallbackThreadKey: String? = null
+    ) = withContext(Dispatchers.IO) {
+        if (messageId > 0L) {
+            deleteSingleMessage(messageId)
+        } else if (!fallbackThreadKey.isNullOrBlank()) {
+            val latestId = smsDao.getLatestMessageIdForThread(fallbackThreadKey)
+            if (latestId != null) {
+                deleteSingleMessage(latestId)
+            }
+        }
     }
 
     suspend fun deleteThreadPermanently(threadKey: String) = withContext(Dispatchers.IO) {

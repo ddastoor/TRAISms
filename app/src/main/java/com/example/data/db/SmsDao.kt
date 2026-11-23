@@ -186,6 +186,9 @@ interface SmsDao {
     @Query("SELECT systemSmsId FROM sms_messages WHERE id = :id AND systemSmsId IS NOT NULL")
     suspend fun getSystemIdForMessage(id: Long): Long?
 
+    @Query("SELECT id FROM sms_messages WHERE threadKey = :threadKey ORDER BY timestampMillis DESC, id DESC LIMIT 1")
+    suspend fun getLatestMessageIdForThread(threadKey: String): Long?
+
     @Query("DELETE FROM sms_messages WHERE id = :id")
     suspend fun deleteMessageById(id: Long)
 

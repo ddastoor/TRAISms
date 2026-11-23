@@ -40,10 +40,10 @@ class SmsDeliverReceiver : BroadcastReceiver() {
             }
         }
 
-        val pendingResult = goAsync()
+        val pendingResult: PendingResult? = goAsync()
         val app = context.applicationContext as? TraiSmsApp
         if (app == null) {
-            pendingResult.finish()
+            pendingResult?.finish()
             return
         }
 
@@ -60,7 +60,7 @@ class SmsDeliverReceiver : BroadcastReceiver() {
                     }
                 }
             } finally {
-                pendingResult.finish()
+                pendingResult?.finish()
             }
         }
     }
