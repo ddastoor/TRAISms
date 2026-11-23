@@ -5,9 +5,11 @@ import android.app.role.RoleManager
 import android.content.ContentValues
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageInstaller
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
+import android.provider.Settings
 import android.provider.Telephony
 import android.telephony.SmsManager
 import androidx.core.content.ContextCompat
@@ -59,6 +61,67 @@ class SystemSmsHelper(private val context: Context) {
         } catch (_: Exception) {
             null
         }
+    }
+
+    /**
+     * Returns true when TRAISms appears to have been sideloaded outside a trusted app store
+     * (e.g. GitHub Releases APK via browser or file manager).
+     *
+     * Uses strictly public SDK APIs guarded across `minSdk 24` through `compileSdk 36.1`.
+     */
+    fun isSideloadedInstall(): Boolean {
+        return runCatching {
+            val pm = appContext.packageManager
+            val packageName = appContext.packageName
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                val sourceInfo = pm.getInstallSourceInfo(packageName)
+                when (sourceInfo.packageSource) {
+                    PackageInstaller.PACKAGE_SOURCE_DOWNLOADED_FILE,
+                    PackageInstaller.PACKAGE_SOURCE_LOCAL_FILE -> true
+                    PackageInstaller.PACKAGE_SOURCE_STORE -> false
+                    else -> sourceInfo.installingPackageName !in TRUSTED_STORE_INSTALLERS
+                }
+            } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                val installer = pm.getInstallSourceInfo(packageName).installingPackageName
+                installer !in TRUSTED_STORE_INSTALLERS
+            } else {
+                @Suppress("DEPRECATION")
+                val installer = pm.getInstallerPackageName(packageName)
+                installer !in TRUSTED_STORE_INSTALLERS
+            }
+        }.getOrDefault(false)
+    }
+
+    /**
+     * Returns true on Android 15+ (API 35+) when TRAISms is sideloaded and does not yet hold
+     * `ROLE_SMS` — the condition under which Android Enhanced Confirmation Mode (ECM) blocks
+     * Default SMS assignment until "Allow restricted settings" is enabled in App Info.
+     *
+     * Uses public SDK APIs only (`EnhancedConfirmationManager` is `@SystemApi` and privileged).
+     */
+    fun isSmsRoleRestricted(): Boolean {
+        return !isDefaultSmsApp() &&
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.VANILLA_ICE_CREAM &&
+            isSideloadedInstall()
+    }
+
+    /**
+     * Builds an Intent for Android's System App Info screen for TRAISms
+     * (`Settings.ACTION_APPLICATION_DETAILS_SETTINGS`), where users on Android 13–16 tap
+     * `⋮ → Allow restricted settings`.
+     */
+    fun buildAppInfoSettingsIntent(): Intent {
+        return Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+            data = Uri.fromParts("package", appContext.packageName, null)
+        }
+    }
+
+    /**
+     * Builds an Intent for Android's Default Apps settings screen
+     * (`Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS`, API 24+).
+     */
+    fun buildDefaultAppsSettingsIntent(): Intent {
+        return Intent(Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS)
     }
 
     fun hasReadSmsPermission(): Boolean {
@@ -269,5 +332,13 @@ class SystemSmsHelper(private val context: Context) {
                 null
             )
         }
+    }
+
+    companion object {
+        private val TRUSTED_STORE_INSTALLERS = setOf(
+            "com.android.vending",
+            "com.amazon.venezia",
+            "com.sec.android.app.samsungapps"
+        )
     }
 }

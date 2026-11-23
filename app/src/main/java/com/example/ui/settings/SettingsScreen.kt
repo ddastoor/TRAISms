@@ -54,6 +54,7 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
@@ -61,6 +62,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -75,6 +77,7 @@ import com.example.data.crypto.BackupSchedule
 import com.example.data.crypto.LeftSwipeAction
 import com.example.data.sms.SystemSmsHelper
 import com.example.ui.common.GlobalDeleteAllMessagesDialog
+import com.example.ui.onboarding.RestrictedSettingsGuidanceCard
 import com.example.ui.theme.EmeraldTertiary
 import com.example.ui.theme.EmeraldTertiaryContainer
 import kotlinx.coroutines.launch
@@ -106,9 +109,15 @@ fun SettingsScreen(
         mutableStateOf(settings.customBackupDays.toString())
     }
 
+    var showRestrictedSettingsGuide by rememberSaveable {
+        mutableStateOf(systemSmsHelper.isSmsRoleRestricted())
+    }
+
     val defaultRoleLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartActivityForResult()
     ) {
+        val granted = systemSmsHelper.isDefaultSmsApp()
+        showRestrictedSettingsGuide = !granted
         onRefreshRoleStatus()
     }
 
@@ -225,14 +234,35 @@ fun SettingsScreen(
                             Spacer(modifier = Modifier.width(10.dp))
                             Button(
                                 onClick = {
-                                    systemSmsHelper.createDefaultSmsRequestIntent()?.let {
-                                        defaultRoleLauncher.launch(it)
+                                    val roleIntent = systemSmsHelper.createDefaultSmsRequestIntent()
+                                    if (roleIntent != null) {
+                                        defaultRoleLauncher.launch(roleIntent)
+                                    } else {
+                                        showRestrictedSettingsGuide = true
                                     }
                                 },
                                 modifier = Modifier.testTag("settings_set_default_sms_button")
                             ) {
                                 Text(stringResource(R.string.settings_set_default_btn))
                             }
+                        }
+                    }
+                }
+
+                if (!isDefaultSmsApp) {
+                    if (showRestrictedSettingsGuide || systemSmsHelper.isSmsRoleRestricted()) {
+                        RestrictedSettingsGuidanceCard(systemSmsHelper = systemSmsHelper)
+                    } else {
+                        TextButton(
+                            onClick = { showRestrictedSettingsGuide = true },
+                            modifier = Modifier
+                                .align(Alignment.CenterHorizontally)
+                                .testTag("settings_show_restricted_guide_button")
+                        ) {
+                            Text(
+                                text = stringResource(R.string.restricted_settings_show_help),
+                                style = MaterialTheme.typography.labelMedium
+                            )
                         }
                     }
                 }

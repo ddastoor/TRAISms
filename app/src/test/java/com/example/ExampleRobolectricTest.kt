@@ -1,21 +1,26 @@
 package com.example
 
 import android.content.Context
+import android.provider.Settings
 import androidx.test.core.app.ApplicationProvider
 import com.example.data.crypto.BackupCryptoEngine
 import com.example.data.crypto.BackupMessageRecord
 import com.example.data.crypto.BackupSenderRuleRecord
 import com.example.data.crypto.EncryptedBackupPayload
 import com.example.data.db.SmsCategory
+import com.example.data.sms.SystemSmsHelper
 import com.example.domain.classifier.OfflineSmsMlClassifier
 import com.example.domain.classifier.RegionProfile
 import com.example.domain.classifier.SmsCategorizationPipeline
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertThrows
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.Shadows
 import org.robolectric.annotation.Config
 
 @RunWith(RobolectricTestRunner::class)
@@ -181,5 +186,39 @@ class ExampleRobolectricTest {
             testLauncher.launch(arrayOf(android.Manifest.permission.READ_SMS))
             testLauncher.unregister()
         }
+    }
+
+    @Test
+    fun `SystemSmsHelper builds App Info and Default Apps settings intents and guards API 35 ECM check on API 34`() {
+        val helper = SystemSmsHelper(context)
+
+        val appInfoIntent = helper.buildAppInfoSettingsIntent()
+        assertEquals(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, appInfoIntent.action)
+        assertEquals("package", appInfoIntent.data?.scheme)
+        assertEquals(context.packageName, appInfoIntent.data?.schemeSpecificPart)
+        assertEquals("package:com.traisms.app", appInfoIntent.data?.toString())
+
+        val defaultAppsIntent = helper.buildDefaultAppsSettingsIntent()
+        assertEquals(Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS, defaultAppsIntent.action)
+
+        // Running under Robolectric @Config(sdk = [34]): API 35+ check must safely return false without crashing
+        assertFalse(helper.isSmsRoleRestricted())
+
+        // Verify sideloaded vs Play Store install detection via public PackageManager APIs
+        val shadowPm = Shadows.shadowOf(context.packageManager)
+        shadowPm.setInstallerPackageName(context.packageName, "com.android.vending")
+        assertFalse(helper.isSideloadedInstall())
+
+        shadowPm.setInstallerPackageName(context.packageName, "com.google.android.packageinstaller")
+        assertTrue(helper.isSideloadedInstall())
+
+        shadowPm.setInstallerPackageName(context.packageName, null)
+        assertTrue(helper.isSideloadedInstall())
+
+        // Verify Restricted Settings guidance strings resolve cleanly
+        assertTrue(context.getString(R.string.restricted_settings_title).contains("Restricted Settings"))
+        assertEquals("Open App Info", context.getString(R.string.restricted_settings_open_app_info))
+        assertEquals("Open Default Apps", context.getString(R.string.restricted_settings_open_default_apps))
+        assertTrue(context.getString(R.string.restricted_settings_tip).contains("Allow restricted settings"))
     }
 }

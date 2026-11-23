@@ -68,4 +68,16 @@
     <string name="app_locked_title">TRAISms Locked</string>
     <string name="app_locked_subtitle">Authenticate with biometrics or device PIN to view encrypted messages.</string>
     <string name="unlock_button">Unlock Inbox</string>
+
+    <!-- Android 15+ / Pixel Restricted Settings Guidance -->
+    <string name="restricted_settings_title">Pixel / Android 15+ Restricted Settings</string>
+    <string name="restricted_settings_why">Android 15 and 16 automatically block APKs downloaded outside the Play Store (such as GitHub Releases) from becoming your Default SMS App until you allow restricted settings once.</string>
+    <string name="restricted_settings_step_1">Tap Open App Info below</string>
+    <string name="restricted_settings_step_2">Tap the ⋮ (three-dot) menu in the top-right corner</string>
+    <string name="restricted_settings_step_3">Tap Allow restricted settings and verify with fingerprint/PIN</string>
+    <string name="restricted_settings_step_4">Return to TRAISms and tap Set TRAISms as Default SMS App</string>
+    <string name="restricted_settings_tip">Tip: On Pixel and Android 15/16, the ⋮ → Allow restricted settings menu option may only appear after tapping \"Set TRAISms as Default SMS App\" once and seeing Android\'s blocked dialog.</string>
+    <string name="restricted_settings_open_app_info">Open App Info</string>
+    <string name="restricted_settings_open_default_apps">Open Default Apps</string>
+    <string name="restricted_settings_show_help">Blocked by Restricted Settings? Show unlock steps</string>
 </resources>
