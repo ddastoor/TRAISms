@@ -1,6 +1,7 @@
 package com.example
 
 import android.content.Context
+import android.content.pm.PackageInstaller
 import android.provider.Settings
 import androidx.test.core.app.ApplicationProvider
 import com.example.data.crypto.BackupCryptoEngine
@@ -204,15 +205,39 @@ class ExampleRobolectricTest {
         // Running under Robolectric @Config(sdk = [34]): API 35+ check must safely return false without crashing
         assertFalse(helper.isSmsRoleRestricted())
 
-        // Verify sideloaded vs Play Store install detection via public PackageManager APIs
+        // Verify sideloaded vs Play Store install detection via public API 33+ InstallSourceInfo
         val shadowPm = Shadows.shadowOf(context.packageManager)
-        shadowPm.setInstallerPackageName(context.packageName, "com.android.vending")
+        shadowPm.setInstallSourceInfo(
+            context.packageName,
+            "com.android.vending",
+            null,
+            null,
+            "com.android.vending",
+            null,
+            PackageInstaller.PACKAGE_SOURCE_STORE
+        )
         assertFalse(helper.isSideloadedInstall())
 
-        shadowPm.setInstallerPackageName(context.packageName, "com.google.android.packageinstaller")
+        shadowPm.setInstallSourceInfo(
+            context.packageName,
+            "com.google.android.packageinstaller",
+            null,
+            null,
+            "com.google.android.packageinstaller",
+            null,
+            PackageInstaller.PACKAGE_SOURCE_DOWNLOADED_FILE
+        )
         assertTrue(helper.isSideloadedInstall())
 
-        shadowPm.setInstallerPackageName(context.packageName, null)
+        shadowPm.setInstallSourceInfo(
+            context.packageName,
+            null,
+            null,
+            null,
+            null,
+            null,
+            PackageInstaller.PACKAGE_SOURCE_UNSPECIFIED
+        )
         assertTrue(helper.isSideloadedInstall())
 
         // Verify Restricted Settings guidance strings resolve cleanly
