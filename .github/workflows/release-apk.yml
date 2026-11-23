@@ -204,6 +204,7 @@ jobs:
           path: release-dist/*
 
       - name: Publish GitHub Release Page with Versioned APK Assets
+        if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG_NAME: ${{ steps.version.outputs.tag_name }}
