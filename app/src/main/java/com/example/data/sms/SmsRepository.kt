@@ -433,6 +433,27 @@ class SmsRepository(
     }
 
     /**
+     * Strictly marks ONLY unarchived unread messages in [category] as read (`isRead = true`)
+     * in both SQLCipher Room and Android's `Telephony.Sms` ContentProvider, leaving all other
+     * categories and archived conversations untouched.
+     */
+    suspend fun markAllActiveInCategoryAsRead(category: SmsCategory): Int = withContext(Dispatchers.IO) {
+        val sysIds = smsDao.getUnreadSystemIdsInActiveCategory(category)
+        val threadKeys = smsDao.getUnreadThreadKeysInActiveCategory(category)
+        val markedCount = smsDao.markAllReadInActiveCategory(category)
+        if (sysIds.isNotEmpty()) {
+            systemSmsHelper.markSystemMessagesRead(sysIds)
+        }
+        threadKeys.forEach { key ->
+            SmsNotificationHelper.cancelNotification(
+                appContext,
+                SmsNotificationHelper.notificationIdForThread(key)
+            )
+        }
+        markedCount
+    }
+
+    /**
      * Strictly deletes ONLY unarchived `PROMOTIONAL` messages older than [daysOld] days
      * from both SQLCipher Room and `Telephony.Sms` ContentProvider.
      */

@@ -245,6 +245,38 @@ interface SmsDao {
     @Query("DELETE FROM sms_messages WHERE category = :category AND isArchived = 0")
     suspend fun deleteActiveMessagesInCategory(category: SmsCategory): Int
 
+    @Query(
+        """
+        SELECT systemSmsId FROM sms_messages 
+        WHERE category = :category 
+          AND isArchived = 0 
+          AND isRead = 0 
+          AND systemSmsId IS NOT NULL
+        """
+    )
+    suspend fun getUnreadSystemIdsInActiveCategory(category: SmsCategory): List<Long>
+
+    @Query(
+        """
+        SELECT DISTINCT threadKey FROM sms_messages 
+        WHERE category = :category 
+          AND isArchived = 0 
+          AND isRead = 0
+        """
+    )
+    suspend fun getUnreadThreadKeysInActiveCategory(category: SmsCategory): List<String>
+
+    @Query(
+        """
+        UPDATE sms_messages 
+        SET isRead = 1 
+        WHERE category = :category 
+          AND isArchived = 0 
+          AND isRead = 0
+        """
+    )
+    suspend fun markAllReadInActiveCategory(category: SmsCategory): Int
+
     /**
      * Strictly deletes ONLY unarchived Promotional messages older than cutoffMillis.
      * Never touches Personal, Transactional, Service, OTP, Government, Unknown, Other, or Archived.

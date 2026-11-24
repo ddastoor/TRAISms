@@ -278,6 +278,13 @@ class MainViewModel(
         }
     }
 
+    fun markAllReadInCategory(category: SmsCategory, onDone: (Int) -> Unit = {}) {
+        viewModelScope.launch {
+            val marked = repository.markAllActiveInCategoryAsRead(category)
+            onDone(marked)
+        }
+    }
+
     fun deleteAllMessagesInApp() {
         viewModelScope.launch {
             repository.deleteAllMessagesInApp()
