@@ -4,8 +4,11 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -44,6 +47,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
@@ -54,6 +58,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.minimumInteractiveComponentSize
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -63,7 +68,10 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -82,7 +90,7 @@ import com.example.ui.theme.CategoryOtpFg
 import com.example.ui.theme.JetBrainsMonoFamily
 import kotlinx.coroutines.launch
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun ThreadDetailScreen(
     threadKey: String,
@@ -92,16 +100,19 @@ fun ThreadDetailScreen(
     onSendReply: (destinationAddress: String, text: String, onResult: (Result<String>) -> Unit) -> Unit,
     onDeleteSingleMessage: (Long) -> Unit,
     onToggleArchive: (String, Boolean) -> Unit,
-    onAssignCategory: (threadKey: String, senderTitle: String, target: SmsCategory, alwaysRule: Boolean) -> Unit
+    onAssignCategory: (threadKey: String, senderTitle: String, target: SmsCategory, alwaysRule: Boolean) -> Unit,
+    onForwardMessage: (String) -> Unit = {}
 ) {
     BackHandler(onBack = onBack)
 
     val context = LocalContext.current
+    val hapticFeedback = LocalHapticFeedback.current
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
     val listState = rememberLazyListState()
 
     var replyText by remember { mutableStateOf("") }
+    var actionMenuMessage by remember { mutableStateOf<SmsMessageEntity?>(null) }
     var deleteCandidate by remember { mutableStateOf<SmsMessageEntity?>(null) }
     var showMoveSheet by remember { mutableStateOf(false) }
 
@@ -288,6 +299,12 @@ fun ThreadDetailScreen(
                 key = { it.id }
             ) { msg ->
                 val isIncoming = msg.isIncoming
+                val bubbleShape = RoundedCornerShape(
+                    topStart = 16.dp,
+                    topEnd = 16.dp,
+                    bottomStart = if (isIncoming) 4.dp else 16.dp,
+                    bottomEnd = if (isIncoming) 16.dp else 4.dp
+                )
                 Column(
                     horizontalAlignment = if (isIncoming) Alignment.Start else Alignment.End,
                     modifier = Modifier.fillMaxWidth()
@@ -297,13 +314,18 @@ fun ThreadDetailScreen(
                         else MaterialTheme.colorScheme.primary,
                         contentColor = if (isIncoming) MaterialTheme.colorScheme.onSurface
                         else MaterialTheme.colorScheme.onPrimary,
-                        shape = RoundedCornerShape(
-                            topStart = 16.dp,
-                            topEnd = 16.dp,
-                            bottomStart = if (isIncoming) 4.dp else 16.dp,
-                            bottomEnd = if (isIncoming) 16.dp else 4.dp
-                        ),
-                        modifier = Modifier.widthIn(max = 340.dp)
+                        shape = bubbleShape,
+                        modifier = Modifier
+                            .widthIn(max = 340.dp)
+                            .clip(bubbleShape)
+                            .combinedClickable(
+                                onClick = {},
+                                onLongClick = {
+                                    hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    actionMenuMessage = msg
+                                }
+                            )
+                            .testTag("thread_message_bubble_${msg.id}")
                     ) {
                         Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
                             Text(
@@ -313,22 +335,30 @@ fun ThreadDetailScreen(
 
                             msg.extractedOtp?.let { otpCode ->
                                 Spacer(modifier = Modifier.height(8.dp))
+                                val otpChipShape = RoundedCornerShape(8.dp)
                                 Surface(
-                                    onClick = {
-                                        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
-                                        clipboard?.setPrimaryClip(ClipData.newPlainText("OTP", otpCode))
-                                        scope.launch {
-                                            snackbarHostState.showSnackbar(
-                                                context.getString(R.string.otp_copied_toast, otpCode)
-                                            )
-                                        }
-                                    },
                                     color = CategoryOtpBg,
                                     contentColor = CategoryOtpFg,
-                                    shape = RoundedCornerShape(8.dp),
+                                    shape = otpChipShape,
                                     modifier = Modifier
                                         .minimumInteractiveComponentSize()
-                                        .border(1.dp, CategoryOtpFg.copy(alpha = 0.4f), RoundedCornerShape(8.dp))
+                                        .border(1.dp, CategoryOtpFg.copy(alpha = 0.4f), otpChipShape)
+                                        .clip(otpChipShape)
+                                        .combinedClickable(
+                                            onClick = {
+                                                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
+                                                clipboard?.setPrimaryClip(ClipData.newPlainText("OTP", otpCode))
+                                                scope.launch {
+                                                    snackbarHostState.showSnackbar(
+                                                        context.getString(R.string.otp_copied_toast, otpCode)
+                                                    )
+                                                }
+                                            },
+                                            onLongClick = {
+                                                hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+                                                actionMenuMessage = msg
+                                            }
+                                        )
                                         .testTag("bubble_copy_otp_${msg.id}")
                                 ) {
                                     Row(
@@ -379,6 +409,134 @@ fun ThreadDetailScreen(
                         }
                     }
                 }
+            }
+        }
+    }
+
+    actionMenuMessage?.let { selectedMsg ->
+        val actionSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+        val optionShape = RoundedCornerShape(12.dp)
+
+        ModalBottomSheet(
+            onDismissRequest = { actionMenuMessage = null },
+            sheetState = actionSheetState,
+            containerColor = MaterialTheme.colorScheme.surface,
+            modifier = Modifier.testTag("message_actions_prompt")
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .navigationBarsPadding()
+                    .padding(horizontal = 20.dp, vertical = 8.dp)
+            ) {
+                Text(
+                    text = stringResource(R.string.message_actions_title),
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = selectedMsg.body,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Spacer(modifier = Modifier.height(14.dp))
+
+                Surface(
+                    color = MaterialTheme.colorScheme.surfaceContainerLow,
+                    contentColor = MaterialTheme.colorScheme.onSurface,
+                    shape = optionShape,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(optionShape)
+                        .clickable {
+                            val bodyToCopy = selectedMsg.body
+                            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
+                            clipboard?.setPrimaryClip(ClipData.newPlainText("SMS", bodyToCopy))
+                            val copiedToast = context.getString(R.string.message_copied_toast)
+                            actionMenuMessage = null
+                            scope.launch {
+                                snackbarHostState.showSnackbar(copiedToast)
+                            }
+                        }
+                        .testTag("message_action_copy")
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp)
+                    ) {
+                        Box(
+                            contentAlignment = Alignment.Center,
+                            modifier = Modifier
+                                .size(38.dp)
+                                .clip(CircleShape)
+                                .background(MaterialTheme.colorScheme.primaryContainer)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Outlined.ContentCopy,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Text(
+                            text = stringResource(R.string.message_action_copy),
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                Surface(
+                    color = MaterialTheme.colorScheme.surfaceContainerLow,
+                    contentColor = MaterialTheme.colorScheme.onSurface,
+                    shape = optionShape,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(optionShape)
+                        .clickable {
+                            val bodyToForward = selectedMsg.body
+                            actionMenuMessage = null
+                            onForwardMessage(bodyToForward)
+                        }
+                        .testTag("message_action_forward")
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp)
+                    ) {
+                        Box(
+                            contentAlignment = Alignment.Center,
+                            modifier = Modifier
+                                .size(38.dp)
+                                .clip(CircleShape)
+                                .background(MaterialTheme.colorScheme.secondaryContainer)
+                        ) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.Send,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Text(
+                            text = stringResource(R.string.message_action_forward),
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
             }
         }
     }

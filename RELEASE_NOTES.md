@@ -39,6 +39,7 @@ To unlock Default SMS access in 3 steps:
   - `Copy OTP` sets `ClipDescription.EXTRA_IS_SENSITIVE` on Android 13+ (API 33+) to mask OTPs in system clipboard overlays (with a toast confirmation on Android 7–12).
   - `Archive` and `Delete` execute asynchronously in the background via non-exported `SmsNotificationActionReceiver` (`goAsync()`) and immediately dismiss the active notification.
   - `Assign Category` launches `MainActivity` directly via `PendingIntent.getActivity` (Android 12+ / `targetSdk 36` notification-trampoline compliant) to open `MoveSenderCategoryBottomSheet` — strictly gated behind `AppLockGateScreen` when App Lock is enabled.
+- **Long-Press SMS Copy & Forward:** Long-pressing any message bubble in an open conversation (`ThreadDetailScreen`) triggers haptic feedback and opens a Material 3 **Message Options** sheet with **Copy** (copies full SMS text to the clipboard with snackbar confirmation) and **Forward** (pre-fills the message body in **New Message** so you can pick a contact or enter a number), while preserving one-tap **Copy OTP** chips inside OTP bubbles.
 - **Expanded Robolectric 4.16.1 Verification Suite:** Added `SmsNotificationActionsRobolectricTest` covering 4-button OTP custom views, 3-button non-OTP and App-Locked redaction, negative `hashCode()` thread notification cancellation, sensitive clipboard flags, background archive/delete database updates, and `MainActivity` `MoveSenderCategoryBottomSheet` + App Lock gating flows.
 
 ### Previous Highlights (v1.0.2 & v1.0.1)

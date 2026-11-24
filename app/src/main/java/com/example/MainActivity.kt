@@ -564,7 +564,10 @@ fun TraiSmsPrimaryApp(
                         onSendReply = viewModel::sendSms,
                         onDeleteSingleMessage = viewModel::deleteSingleMessage,
                         onToggleArchive = viewModel::setThreadArchived,
-                        onAssignCategory = viewModel::assignSenderCategory
+                        onAssignCategory = viewModel::assignSenderCategory,
+                        onForwardMessage = { forwardedBody ->
+                            navController.navigate(ComposeSmsRoute(initialBody = forwardedBody))
+                        }
                     )
                 }
 

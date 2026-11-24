@@ -52,6 +52,10 @@
     <string name="compose_send_directly_to">Send directly to %1$s</string>
     <string name="compose_direct_recipient_subtitle">Tap to write your message below</string>
     <string name="delete_message_confirm">Delete this message permanently?</string>
+    <string name="message_actions_title">Message Options</string>
+    <string name="message_action_copy">Copy</string>
+    <string name="message_action_forward">Forward</string>
+    <string name="message_copied_toast">Message copied to clipboard</string>
 
     <!-- Archive -->
     <string name="archive_empty_title">Archive is clean</string>
