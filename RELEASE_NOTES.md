@@ -33,6 +33,9 @@ To unlock Default SMS access in 3 steps:
 
 ## What's New in v1.0.3
 
+- **Per-Category "Mark All as Read":**
+  - Added a one-tap **Mark all as read** button directly inside each category tab's filter bar whenever unread messages are present (`unreadCount > 0`), alongside **Mark all as read in [Category]** in the inbox **⋮** overflow menu (automatically disabled when a tab has zero unread messages).
+  - Surgically marks **only** active (unarchived) unread messages in the selected category tab as read (`isRead = true` in SQLCipher Room and `READ = 1` in Android's `Telephony.Sms` provider when TRAISms is the Default SMS app, while dismissing active notifications for those conversations) — leaving all 7 other category tabs and archived conversations completely untouched.
 - **Automatic Mark-as-Read for New Promotional Messages:**
   - Newly received and post-setup delta-synced messages classified into the **Promotional** tab (`outcome.category == SmsCategory.PROMOTIONAL` — via TRAI `-P` headers, local ML promotional detection, or custom Promotional sender rules) are automatically marked as read (`isRead = true` in SQLCipher Room and `READ = 1` in Android's `Telephony.Sms` provider when TRAISms is the Default SMS app) so promotional clutter never inflates unread counts.
   - Strictly and exclusively scoped to **Promotional** — incoming messages across all 7 other categories (**Personal**, **Transactional**, **Service**, **OTP** including OTPs sent from `-P` headers, **Government**, **Unknown**, and **Other**) remain unread until opened, and initial device inbox imports preserve existing read/unread history.
@@ -76,10 +79,10 @@ Every incoming and imported SMS is evaluated completely offline in strict waterf
 
 ### 3. Fast Material 3 Light UI & Smart Controls
 - **Strict High-Contrast Light Mode:** Crisp `Plus Jakarta Sans` + `JetBrains Mono` typography and indexed Room queries for instant scrolling.
-- **Per-Tab Unread Filter:** Independent **Show unread** toggle across all 8 tabs (enabled by default) backed by Tink-encrypted DataStore preferences and one-tap read-history expansion.
+- **Per-Tab Unread Filter & Mark All as Read:** Independent **Show unread** toggle across all 8 tabs (enabled by default) backed by Tink-encrypted DataStore preferences, one-tap read-history expansion, and per-tab **Mark all as read** (inline in the filter bar and in the **⋮** menu) strictly isolated to active messages in the current category.
 - **Swipe Gestures:** Swipe Left to **Archive** (or **Delete**) with Undo; Swipe Right to open **Move Sender Category** and save permanent sender rules.
 - **Targeted Promotional & OTP Auto-Delete:** Independent periodic 12-hour offline `WorkManager` cleanup schedules strictly restricted to unarchived **Promotional** (`7` days default) and unarchived **OTP** (`Off` default) messages (`Off`, `1`, `3`, `7`, `15`, or `30` days), configurable directly from in-tab preset bars and **Settings**.
-- **Bulk Hygiene:** Per-tab *Delete all in [Tab]* action and two-step *Delete All Messages in App* guarded by `DELETE` confirmation.
+- **Bulk Hygiene:** Per-tab *Mark all as read in [Tab]* and *Delete all in [Tab]* actions, plus two-step *Delete All Messages in App* guarded by `DELETE` confirmation.
 
 ### 4. Hardware-Backed Encryption & Google Drive SAF Backup
 - **Database at Rest:** Encrypted with 256-bit **SQLCipher** (`net.zetetic:sqlcipher-android`) using a random 32-byte key wrapped by **Google Tink** (`AndroidKeysetManager` AES-256-GCM in Android Hardware Keystore).

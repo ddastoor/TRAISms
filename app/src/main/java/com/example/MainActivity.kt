@@ -477,7 +477,8 @@ fun TraiSmsPrimaryApp(
                         onUpdatePromoAutoDelete = viewModel::updatePromoAutoDeleteDays,
                         onUpdateOtpAutoDelete = viewModel::updateOtpAutoDeleteDays,
                         showUnreadOnly = currentCategoryUnreadOnly,
-                        onToggleCategoryUnreadOnly = viewModel::updateCategoryUnreadOnly
+                        onToggleCategoryUnreadOnly = viewModel::updateCategoryUnreadOnly,
+                        onMarkAllReadInCurrentTab = viewModel::markAllReadInCategory
                     )
                 }
 

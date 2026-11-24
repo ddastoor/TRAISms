@@ -37,6 +37,7 @@ import androidx.compose.material.icons.outlined.AutoDelete
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.DeleteForever
 import androidx.compose.material.icons.outlined.DeleteSweep
+import androidx.compose.material.icons.outlined.DoneAll
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.MarkEmailUnread
 import androidx.compose.material.icons.outlined.MoreVert
@@ -137,7 +138,8 @@ fun MessagesScreen(
     onUpdatePromoAutoDelete: (Int) -> Unit = {},
     onUpdateOtpAutoDelete: (Int) -> Unit = {},
     showUnreadOnly: Boolean = true,
-    onToggleCategoryUnreadOnly: (SmsCategory, Boolean) -> Unit = { _, _ -> }
+    onToggleCategoryUnreadOnly: (SmsCategory, Boolean) -> Unit = { _, _ -> },
+    onMarkAllReadInCurrentTab: (SmsCategory, (Int) -> Unit) -> Unit = { _, onDone -> onDone(0) }
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -258,6 +260,31 @@ fun MessagesScreen(
                                         onOpenOnboardingGuide()
                                     },
                                     modifier = Modifier.testTag("menu_open_onboarding")
+                                )
+                                DropdownMenuItem(
+                                    text = {
+                                        Text(stringResource(R.string.mark_all_read_in_tab, selectedCategory.title))
+                                    },
+                                    leadingIcon = {
+                                        Icon(Icons.Outlined.DoneAll, contentDescription = null)
+                                    },
+                                    enabled = unreadInTab > 0,
+                                    onClick = {
+                                        val targetCat = selectedCategory
+                                        overflowExpanded = false
+                                        onMarkAllReadInCurrentTab(targetCat) { markedCount ->
+                                            scope.launch {
+                                                snackbarHostState.showSnackbar(
+                                                    if (markedCount == 0) {
+                                                        "No unread ${targetCat.title} messages"
+                                                    } else {
+                                                        "Marked $markedCount ${targetCat.title} message(s) as read"
+                                                    }
+                                                )
+                                            }
+                                        }
+                                    },
+                                    modifier = Modifier.testTag("menu_mark_all_read_in_tab")
                                 )
                                 DropdownMenuItem(
                                     text = {
@@ -549,6 +576,35 @@ fun MessagesScreen(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.testTag("category_unread_filter_summary")
                             )
+                        }
+                        if (unreadInTab > 0) {
+                            TextButton(
+                                onClick = {
+                                    val targetCat = selectedCategory
+                                    onMarkAllReadInCurrentTab(targetCat) { markedCount ->
+                                        if (markedCount > 0) {
+                                            scope.launch {
+                                                snackbarHostState.showSnackbar(
+                                                    "Marked $markedCount ${targetCat.title} message(s) as read"
+                                                )
+                                            }
+                                        }
+                                    }
+                                },
+                                modifier = Modifier.testTag("category_mark_all_read_button")
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Outlined.DoneAll,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(Modifier.width(4.dp))
+                                Text(
+                                    text = stringResource(R.string.mark_all_read_short),
+                                    style = MaterialTheme.typography.labelMedium,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            }
                         }
                         Switch(
                             checked = showUnreadOnly,
