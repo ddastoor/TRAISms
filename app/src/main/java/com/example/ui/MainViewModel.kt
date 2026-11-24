@@ -22,6 +22,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
@@ -71,14 +72,26 @@ class MainViewModel(
 
     val syncProgress: StateFlow<SyncProgressState> = repository.syncProgress
 
+    val currentCategoryUnreadOnly: StateFlow<Boolean> = combine(
+        _selectedCategory,
+        settings
+    ) { cat, appSettings ->
+        appSettings.isCategoryUnreadOnly(cat)
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5_000),
+        initialValue = true
+    )
+
     val activeThreads: StateFlow<List<ThreadSummary>> = combine(
         _selectedCategory,
-        _searchQuery
-    ) { cat, query ->
-        cat to query.trim()
-    }.flatMapLatest { (cat, query) ->
+        _searchQuery,
+        settings
+    ) { cat, query, appSettings ->
+        Triple(cat, query.trim(), appSettings.isCategoryUnreadOnly(cat))
+    }.distinctUntilChanged().flatMapLatest { (cat, query, unreadOnly) ->
         if (query.isEmpty()) {
-            repository.observeCategoryThreads(cat)
+            repository.observeCategoryThreads(cat, unreadOnly = unreadOnly)
         } else {
             repository.searchActiveThreads(query)
         }
@@ -165,6 +178,16 @@ class MainViewModel(
 
     fun selectCategory(category: SmsCategory) {
         _selectedCategory.value = category
+    }
+
+    fun updateCategoryUnreadOnly(category: SmsCategory, unreadOnly: Boolean) {
+        viewModelScope.launch {
+            settingsStore.updateSettings { current ->
+                current.copy(
+                    categoryShowUnreadOnly = current.categoryShowUnreadOnly + (category.name to unreadOnly)
+                )
+            }
+        }
     }
 
     fun updateSearchQuery(query: String) {

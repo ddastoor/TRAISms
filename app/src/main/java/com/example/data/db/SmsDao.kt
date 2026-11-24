@@ -62,6 +62,38 @@ interface SmsDao {
             SELECT 
                 threadKey,
                 MAX(timestampMillis * 1000000 + id) AS maxSortKey,
+                COUNT(*) AS unreadCount,
+                (SELECT COUNT(*) FROM sms_messages all_m WHERE all_m.threadKey = sms_messages.threadKey AND all_m.isArchived = 0 AND all_m.category = :category) AS messageCount
+            FROM sms_messages
+            WHERE isArchived = 0 AND category = :category AND isRead = 0 AND isIncoming = 1
+            GROUP BY threadKey
+        ) agg ON m.threadKey = agg.threadKey AND (m.timestampMillis * 1000000 + m.id) = agg.maxSortKey
+        WHERE m.isArchived = 0 AND m.category = :category AND m.isRead = 0 AND isIncoming = 1
+        ORDER BY m.timestampMillis DESC, m.id DESC
+        """
+    )
+    fun observeUnreadCategoryThreads(category: SmsCategory): Flow<List<ThreadSummary>>
+
+    @Query(
+        """
+        SELECT 
+            m.id AS latestMessageId,
+            m.threadKey AS threadKey,
+            m.rawAddress AS rawAddress,
+            m.contactName AS contactName,
+            m.body AS latestBody,
+            m.timestampMillis AS latestTimestampMillis,
+            m.category AS category,
+            m.extractedOtp AS extractedOtp,
+            m.isArchived AS isArchived,
+            agg.unreadCount AS unreadCount,
+            agg.messageCount AS messageCount,
+            m.classificationSource AS classificationSource
+        FROM sms_messages m
+        INNER JOIN (
+            SELECT 
+                threadKey,
+                MAX(timestampMillis * 1000000 + id) AS maxSortKey,
                 SUM(CASE WHEN isRead = 0 AND isIncoming = 1 THEN 1 ELSE 0 END) AS unreadCount,
                 COUNT(*) AS messageCount
             FROM sms_messages

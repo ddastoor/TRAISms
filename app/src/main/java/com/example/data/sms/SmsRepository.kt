@@ -58,8 +58,12 @@ class SmsRepository(
     private val _syncProgress = MutableStateFlow(SyncProgressState())
     val syncProgress: StateFlow<SyncProgressState> = _syncProgress.asStateFlow()
 
-    fun observeCategoryThreads(category: SmsCategory): Flow<List<ThreadSummary>> =
-        smsDao.observeCategoryThreads(category)
+    fun observeCategoryThreads(
+        category: SmsCategory,
+        unreadOnly: Boolean = false
+    ): Flow<List<ThreadSummary>> =
+        if (unreadOnly) smsDao.observeUnreadCategoryThreads(category)
+        else smsDao.observeCategoryThreads(category)
 
     fun searchActiveThreads(query: String): Flow<List<ThreadSummary>> =
         smsDao.searchActiveThreads(query)

@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.core.DataStoreFactory
 import androidx.datastore.core.Serializer
+import com.example.data.db.SmsCategory
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -59,8 +60,12 @@ data class AppSettings(
     val initialSyncCompleted: Boolean = false,
     val onboardingDismissed: Boolean = false,
     val smsFontSize: SmsFontSize = SmsFontSize.DEFAULT,
-    val smsFontBold: Boolean = false
-)
+    val smsFontBold: Boolean = false,
+    val categoryShowUnreadOnly: Map<String, Boolean> = emptyMap() // Per-tab Show Unread toggle; absent keys default to true = Unread Only
+) {
+    fun isCategoryUnreadOnly(category: SmsCategory): Boolean =
+        categoryShowUnreadOnly[category.name] ?: true
+}
 
 /**
  * Tink AEAD Serializer for Jetpack DataStore so sensitive settings, SAF URIs,
