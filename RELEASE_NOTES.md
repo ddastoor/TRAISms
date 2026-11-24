@@ -1,4 +1,4 @@
-# TRAISms v1.0.2 — New Message Keyboard Inset Fix & Smarter Contact Search
+# TRAISms v1.0.3 — Actionable SMS Notifications & 4-Button OTP Shade
 
 **Package ID:** `com.traisms.app`  
 **Minimum Android Version:** Android 7.0 (API 24) • **Target SDK:** Android 16 (API 36)  
@@ -8,13 +8,13 @@
 
 ## Download & Install
 
-Download **`TRAISms-v1.0.2-release.apk`** from the **Assets** section below:
+Download **`TRAISms-v1.0.3-release.apk`** from the **Assets** section below:
 
 1. Verify the file's SHA-256 checksum against `SHA256SUMS.txt`:
    ```bash
    sha256sum -c SHA256SUMS.txt
    ```
-2. Transfer `TRAISms-v1.0.2-release.apk` to your Android phone and open it to install.
+2. Transfer `TRAISms-v1.0.3-release.apk` to your Android phone and open it to install.
 3. Launch **TRAISms** and tap **Set TRAISms as Default SMS App** to import and encrypt your existing SMS inbox on-device.
 
 ### Installing on Android 15 / 16 (Google Pixel & Sideloaded APKs)
@@ -31,16 +31,20 @@ To unlock Default SMS access in 3 steps:
 
 ---
 
-## What's New in v1.0.2
+## What's New in v1.0.3
 
-- **New Message & Keyboard Inset Fix (Pixel / Android 15–16):** Eliminated double-applied `WindowInsets.ime` and `statusBars` insets across `MainActivity`, `ComposeSmsScreen`, and `ThreadDetailScreen` that previously collapsed the contact picker list when opening the soft keyboard.
-- **Smarter Contact Search & Compose UX:** Added digit-normalized phone matching in `ContactLookupCache` (matching formatted numbers like `+91 98765 43210` or `(415) 555-2671` when typing raw digits), a recipient clear button, `ImeAction.Next` / auto-focus to the message body on contact tap, and a direct-send row for unsaved numbers.
-- **Expanded Robolectric Verification:** Added Pixel 7 keyboard-open viewport (`411×526 dp`) Compose layout/interaction tests and formatted-number search tests.
+- **4-Button OTP Custom `RemoteViews` Notifications:** Unlocked OTP alerts use `NotificationCompat.DecoratedCustomViewStyle` with custom collapsed, expanded, and heads-up `RemoteViews` (`Copy OTP`, `Archive`, `Assign Category`, `Delete`), overcoming Android SystemUI's 3-action cap cleanly without duplicate standard notification actions.
+- **3-Button Standard Actions & App Lock Redaction:** Non-OTP and App-Locked notifications provide 3 standard actions (`Archive`, `Assign Category`, `Delete`). When **App Lock** is enabled, sender and OTP/message previews are fully redacted and `Copy OTP` is omitted so verification codes cannot be exfiltrated while locked.
+- **Clipboard Privacy, Background Actions & Trampoline-Compliant Category Routing:**
+  - `Copy OTP` sets `ClipDescription.EXTRA_IS_SENSITIVE` on Android 13+ (API 33+) to mask OTPs in system clipboard overlays (with a toast confirmation on Android 7–12).
+  - `Archive` and `Delete` execute asynchronously in the background via non-exported `SmsNotificationActionReceiver` (`goAsync()`) and immediately dismiss the active notification.
+  - `Assign Category` launches `MainActivity` directly via `PendingIntent.getActivity` (Android 12+ / `targetSdk 36` notification-trampoline compliant) to open `MoveSenderCategoryBottomSheet` — strictly gated behind `AppLockGateScreen` when App Lock is enabled.
+- **Expanded Robolectric 4.16.1 Verification Suite:** Added `SmsNotificationActionsRobolectricTest` covering 4-button OTP custom views, 3-button non-OTP and App-Locked redaction, negative `hashCode()` thread notification cancellation, sensitive clipboard flags, background archive/delete database updates, and `MainActivity` `MoveSenderCategoryBottomSheet` + App Lock gating flows.
 
-### Previous Highlights (v1.0.1)
+### Previous Highlights (v1.0.2 & v1.0.1)
 
-- **Pixel / Android 15+ Restricted Settings In-App Recovery:** Added built-in detection and recovery guidance in both **Onboarding** and **Settings** when Android blocks the Default SMS App role on sideloaded installs, including step-by-step instructions, one-tap **Open App Info**, and **Open Default Apps** shortcuts.
-- **Unified Versioning & Settings About Display:** Centralized `VERSION_NAME` and `VERSION_CODE` in `version.properties`, driving Gradle builds, the in-app **Settings → About TRAISms** version card, APK filenames, and GitHub Release tags in lockstep.
+- **New Message Keyboard Inset Fix & Smarter Contact Search (`v1.0.2`):** Eliminated double-applied `WindowInsets.ime` and `statusBars` insets across `MainActivity`, `ComposeSmsScreen`, and `ThreadDetailScreen` on Pixel / Android 15–16, and added digit-normalized formatted phone matching in `ContactLookupCache`, recipient clear/auto-focus UX, and direct-send rows for unsaved numbers.
+- **Pixel / Android 15+ Restricted Settings Recovery & Unified Versioning (`v1.0.1`):** Added built-in detection and one-tap **Open App Info** / **Open Default Apps** recovery shortcuts when Android blocks Default SMS role assignment on sideloaded APKs, alongside centralized `version.properties` versioning across Gradle, **Settings → About TRAISms**, APK filenames, and GitHub Releases.
 
 ---
 

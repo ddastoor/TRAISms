@@ -2,7 +2,7 @@
 
 **Production-grade, security-hardened, 100% offline Android SMS organizer** built with Kotlin, Jetpack Compose, Material Design 3, SQLCipher, Google Tink, Jetpack DataStore, LiteRT, and WorkManager.
 
-> **Latest Release & APK Download:** Visit the [**GitHub Releases**](https://github.com/ddastoor/TRAISms/releases/latest) page to download the latest versioned `TRAISms-v<version>-release.apk` and `SHA256SUMS.txt`.
+> **Latest Release & APK Download (`v1.0.3`):** Visit the [**GitHub Releases**](https://github.com/ddastoor/TRAISms/releases/latest) page to download `TRAISms-v1.0.3-release.apk` (pattern: `TRAISms-v<version>-release.apk`) and `SHA256SUMS.txt`.
 >
 > **Android 15+ / Pixel Sideloading Note:** Android 15/16's *Enhanced Confirmation Mode* blocks sideloaded APKs from becoming the Default SMS App until you allow restricted settings. If Android denies the request:
 > 1. Tap **Open App Info** in TRAISms (or open **Settings → Apps → TRAISms**).
@@ -44,7 +44,7 @@ app/src/main/java/com/example/
 ├── data/
 │   ├── crypto/       # TinkKeyManager, EncryptedSettingsStore, BackupCryptoEngine
 │   ├── db/           # SQLCipher TraiSmsDatabase, SmsDao, SenderRuleDao, Entities
-│   └── sms/          # SmsRepository, SmsDeliverReceiver, MmsWapPushReceiver, HeadlessSmsSendService
+│   └── sms/          # SmsRepository, SmsDeliverReceiver, SmsNotificationHelper, SmsNotificationActionReceiver, MmsWapPushReceiver, HeadlessSmsSendService
 ├── domain/
 │   └── classifier/   # SmsCategorizationPipeline, OtpDetector, OfflineSmsMlClassifier, RegionProfileDetector
 ├── worker/           # PromotionalCleanupWorker (12h), ScheduledBackupWorker, WorkScheduler
@@ -68,4 +68,4 @@ This repository includes [`.github/workflows/release-apk.yml`](.github/workflows
 2. Runs unit and Robolectric verification tests (`:app:testDebugUnitTest`).
 3. Builds signed release and debug APKs (`TRAISms-v<version>-release.apk` and `TRAISms-v<version>-debug.apk`).
 4. Verifies via `aapt2` that the release APK embeds the exact matching `versionName`/`versionCode` and contains zero network permissions.
-5. Generates `SHA256SUMS.txt` and publishes the formatted release page from [`RELEASE_NOTES.md`](RELEASE_NOTES.md) directly to [**GitHub Releases**](https://github.com/ddastoor/TRAISms/releases) whenever pushed to `main`/`master`, tagged `v*`, or triggered manually from the **Actions** tab.
+5. Generates `SHA256SUMS.txt` and uploads the versioned APKs + checksums (`TRAISms-v<version>-APKs`) as a workflow artifact on pushes to `main`/`master` (after `:app:testDebugUnitTest` and `aapt2` zero-network-permission verification), while publishing the formatted release page from [`RELEASE_NOTES.md`](RELEASE_NOTES.md) directly to [**GitHub Releases**](https://github.com/ddastoor/TRAISms/releases) when tagged `v*` (e.g. `v1.0.3`) or triggered manually via `workflow_dispatch` from the **Actions** tab.
