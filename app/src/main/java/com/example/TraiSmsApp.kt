@@ -62,6 +62,7 @@ class TraiSmsApp : Application() {
             runCatching {
                 val settings = container.settingsStore.getSettingsSnapshot()
                 container.workScheduler.syncPromotionalCleanupSchedule(settings.promoAutoDeleteDays)
+                container.workScheduler.syncOtpCleanupSchedule(settings.otpAutoDeleteDays)
                 container.workScheduler.syncBackupSchedule(settings.backupSchedule, settings.customBackupDays)
             }
         }

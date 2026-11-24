@@ -38,6 +38,24 @@ class WorkScheduler(context: Context) {
         )
     }
 
+    fun syncOtpCleanupSchedule(otpAutoDeleteDays: Int) {
+        val workManager = runCatching { WorkManager.getInstance(appContext) }.getOrNull() ?: return
+        if (otpAutoDeleteDays <= 0) {
+            workManager.cancelUniqueWork(OtpCleanupWorker.UNIQUE_WORK_NAME)
+            return
+        }
+
+        val request = PeriodicWorkRequestBuilder<OtpCleanupWorker>(12, TimeUnit.HOURS)
+            .setConstraints(offlineConstraints)
+            .build()
+
+        workManager.enqueueUniquePeriodicWork(
+            OtpCleanupWorker.UNIQUE_WORK_NAME,
+            ExistingPeriodicWorkPolicy.KEEP,
+            request
+        )
+    }
+
     fun syncBackupSchedule(schedule: BackupSchedule, customDays: Int) {
         val workManager = runCatching { WorkManager.getInstance(appContext) }.getOrNull() ?: return
         val intervalDays = when (schedule) {

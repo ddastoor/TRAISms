@@ -238,6 +238,31 @@ interface SmsDao {
     )
     suspend fun deleteExpiredPromotionalMessages(cutoffMillis: Long): Int
 
+    /**
+     * Strictly deletes ONLY unarchived OTP messages older than cutoffMillis.
+     * Never touches Personal, Transactional, Service, Promotional, Government, Unknown, Other, or Archived.
+     */
+    @Query(
+        """
+        SELECT systemSmsId FROM sms_messages 
+        WHERE category = 'OTP' 
+          AND isArchived = 0 
+          AND timestampMillis < :cutoffMillis 
+          AND systemSmsId IS NOT NULL
+        """
+    )
+    suspend fun getExpiredOtpSystemIds(cutoffMillis: Long): List<Long>
+
+    @Query(
+        """
+        DELETE FROM sms_messages 
+        WHERE category = 'OTP' 
+          AND isArchived = 0 
+          AND timestampMillis < :cutoffMillis
+        """
+    )
+    suspend fun deleteExpiredOtpMessages(cutoffMillis: Long): Int
+
     @Query("SELECT systemSmsId FROM sms_messages WHERE systemSmsId IS NOT NULL")
     suspend fun getAllSystemIds(): List<Long>
 

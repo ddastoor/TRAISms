@@ -279,6 +279,16 @@ class MainViewModel(
         }
     }
 
+    fun updateOtpAutoDeleteDays(days: Int) {
+        viewModelScope.launch {
+            settingsStore.updateSettings { it.copy(otpAutoDeleteDays = days) }
+            workScheduler.syncOtpCleanupSchedule(days)
+            if (days > 0) {
+                repository.purgeExpiredOtpMessages(days)
+            }
+        }
+    }
+
     fun updateLeftSwipeAction(action: LeftSwipeAction) {
         viewModelScope.launch {
             settingsStore.updateSettings { it.copy(leftSwipeAction = action) }

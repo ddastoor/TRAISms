@@ -419,6 +419,18 @@ class SmsRepository(
         smsDao.deleteExpiredPromotionalMessages(cutoffMillis)
     }
 
+    /**
+     * Strictly deletes ONLY unarchived `OTP` messages older than [daysOld] days
+     * from both SQLCipher Room and `Telephony.Sms` ContentProvider.
+     */
+    suspend fun purgeExpiredOtpMessages(daysOld: Int): Int = withContext(Dispatchers.IO) {
+        if (daysOld <= 0) return@withContext 0
+        val cutoffMillis = System.currentTimeMillis() - (daysOld.toLong() * 24L * 60L * 60L * 1000L)
+        val sysIds = smsDao.getExpiredOtpSystemIds(cutoffMillis)
+        systemSmsHelper.deleteFromSystemProvider(sysIds)
+        smsDao.deleteExpiredOtpMessages(cutoffMillis)
+    }
+
     suspend fun deleteAllMessagesInApp() = withContext(Dispatchers.IO) {
         val allSysIds = smsDao.getAllSystemIds()
         systemSmsHelper.deleteFromSystemProvider(allSysIds)

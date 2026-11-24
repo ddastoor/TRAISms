@@ -41,6 +41,7 @@ enum class BackupSchedule(val label: String, val intervalDays: Int) {
 @Serializable
 data class AppSettings(
     val promoAutoDeleteDays: Int = 7, // Default: 7 Days (0 = Off, 1, 3, 7, 15, 30)
+    val otpAutoDeleteDays: Int = 0, // Default: 0 = Off; options: 0, 1, 3, 7, 15, 30
     val leftSwipeAction: LeftSwipeAction = LeftSwipeAction.ARCHIVE,
     val unarchiveOnNewSms: Boolean = true,
     val regionOverride: String = "AUTO", // AUTO, IN, US, GB, CA, EU_EN, GLOBAL_EN
