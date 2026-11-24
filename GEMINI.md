@@ -18,7 +18,10 @@ For this repository (`TRAISms`), **`/swarm` is the mandatory default mode for ev
        - If an earlier coordinator turn was interrupted before its worker(s) were spawned, immediately spawn worker(s) for **both** that unfinished prior prompt and the new prompt in parallel (`workspace: "share"`), keeping all active threads in `<appData>/brain/<conversation-id>/.system_generated/swarm/plan.json`.
    - Always have `@verifier` verify every active thread before completion, and merge `workspace: "share"` worker commits into your working copy **before** calling `swarm(action="kill")`.
 
-3. **When to skip spawning new workers:**
+3. **Auto-Commit & Auto-Push Every Finished Change:**
+   - Each time a change is finished and verified by `@verifier`, the coordinator **must** automatically commit all landed changes cleanly and run `git push` to `origin` without waiting to be asked (`workspace: "share"` workers commit locally in their worktrees without pushing; if missing or rejected credentials block `git push`, report the exact error clearly).
+
+4. **When to skip spawning new workers:**
    - Pure Q&A, quick status checks, or when the user explicitly asks to work directly without `/swarm` — while still keeping any existing background Swarm workers from previous prompts running uninterrupted.
 
 ## TRAISms Core Project Invariants (Apply to All Workers)

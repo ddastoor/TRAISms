@@ -50,7 +50,7 @@ At the start of **every** new prompt in a conversation:
   ending with `[Open the Swarm UI](sidecar://swarm/swarm_board/?auto_open=false)` on its own line.
 - When board messages wake you:
   - Always merge/cherry-pick a `workspace="share"` worker's committed branch/SHA into your working copy **before** calling `swarm(action="kill", name="<worker>")` (killing deletes its worktree).
-  - Never push to a remote unless the user asks.
+  - **Auto-commit & auto-push:** Once `@verifier` signs off and changes are landed in the coordinator workspace, ensure everything is cleanly committed and immediately `git push` to `origin` without waiting to be asked (`workspace="share"` workers commit locally only; if missing or rejected credentials block `git push`, report the exact error clearly).
   - Only retire workers whose full assignment has been verified and landed.
 
 ## Narrow Exception (When Not to Spawn Workers)
