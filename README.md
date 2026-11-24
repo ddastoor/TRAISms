@@ -29,7 +29,7 @@
 1. **Personal** — Saved device contacts & user-assigned personal senders
 2. **Transactional** — Banking, UPI, cards, invoices & TRAI `-T` headers
 3. **Service** — Telecom, deliveries, travel/IRCTC, `127xxx` consent & TRAI `-S` headers
-4. **OTP** — Priority-extracted 4–8 char 2FA/verification codes with one-tap **Copy OTP** chips
+4. **OTP** — Priority-extracted 4–8 char 2FA/verification codes with one-tap **Copy OTP** chips (with optional 1–30 day auto-cleanup)
 5. **Promotional** — Offers, marketing & TRAI `-P` headers (with 7-day default auto-cleanup)
 6. **Government** — Civic advisories, emergency alerts, NHS/GOVUK/IRS/CRA/NDMA & TRAI `-G` headers
 7. **Unknown** — Unsaved raw 7–15 digit phone numbers without alphanumeric headers
@@ -47,7 +47,7 @@ app/src/main/java/com/example/
 │   └── sms/          # SmsRepository, SmsDeliverReceiver, SmsNotificationHelper, SmsNotificationActionReceiver, MmsWapPushReceiver, HeadlessSmsSendService
 ├── domain/
 │   └── classifier/   # SmsCategorizationPipeline, OtpDetector, OfflineSmsMlClassifier, RegionProfileDetector
-├── worker/           # PromotionalCleanupWorker (12h), ScheduledBackupWorker, WorkScheduler
+├── worker/           # PromotionalCleanupWorker (12h), OtpCleanupWorker (12h), ScheduledBackupWorker, WorkScheduler
 └── ui/
     ├── messages/     # 8-tab Inbox, search, swipe gestures, per-tab & global delete
     ├── thread/       # ThreadDetailScreen & ComposeSmsScreen

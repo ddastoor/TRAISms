@@ -106,7 +106,8 @@ fun SettingsScreen(
     onRerunCategorization: ((Int) -> Unit) -> Unit,
     onDeleteAllMessagesInApp: () -> Unit,
     onUpdateSmsFontSize: (SmsFontSize) -> Unit = {},
-    onUpdateSmsFontBold: (Boolean) -> Unit = {}
+    onUpdateSmsFontBold: (Boolean) -> Unit = {},
+    onUpdateOtpAutoDelete: (Int) -> Unit = {}
 ) {
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
@@ -354,6 +355,35 @@ fun SettingsScreen(
                                 },
                                 label = { Text(label) },
                                 modifier = Modifier.testTag("promo_preset_$days")
+                            )
+                        }
+                    }
+                }
+
+                // OTP AUTO-DELETE CARD
+                SettingsGroupCard(
+                    icon = Icons.Outlined.AutoDelete,
+                    title = stringResource(R.string.settings_otp_auto_delete_title),
+                    subtitle = stringResource(R.string.settings_otp_auto_delete_subtitle)
+                ) {
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        promoPresets.forEach { (days, label) ->
+                            FilterChip(
+                                selected = settings.otpAutoDeleteDays == days,
+                                onClick = {
+                                    onUpdateOtpAutoDelete(days)
+                                    scope.launch {
+                                        snackbarHostState.showSnackbar(
+                                            if (days == 0) "OTP auto-delete disabled"
+                                            else "OTP SMS older than $label will auto-delete"
+                                        )
+                                    }
+                                },
+                                label = { Text(label) },
+                                modifier = Modifier.testTag("otp_preset_$days")
                             )
                         }
                     }

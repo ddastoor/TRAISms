@@ -470,7 +470,11 @@ fun TraiSmsPrimaryApp(
                         onRequestCountInCurrentTab = viewModel::countActiveMessagesInCategory,
                         onDeleteAllInApp = viewModel::deleteAllMessagesInApp,
                         onTriggerDeviceSync = viewModel::refreshPermissionsAndSyncIfAuthorized,
-                        onSeedDemoInbox = viewModel::seedDemoInbox
+                        onSeedDemoInbox = viewModel::seedDemoInbox,
+                        promoAutoDeleteDays = settings.promoAutoDeleteDays,
+                        otpAutoDeleteDays = settings.otpAutoDeleteDays,
+                        onUpdatePromoAutoDelete = viewModel::updatePromoAutoDeleteDays,
+                        onUpdateOtpAutoDelete = viewModel::updateOtpAutoDeleteDays
                     )
                 }
 
@@ -528,7 +532,8 @@ fun TraiSmsPrimaryApp(
                         onRerunCategorization = viewModel::rerunCategorizationOnAll,
                         onDeleteAllMessagesInApp = viewModel::deleteAllMessagesInApp,
                         onUpdateSmsFontSize = viewModel::updateSmsFontSize,
-                        onUpdateSmsFontBold = viewModel::updateSmsFontBold
+                        onUpdateSmsFontBold = viewModel::updateSmsFontBold,
+                        onUpdateOtpAutoDelete = viewModel::updateOtpAutoDeleteDays
                     )
                 }
 

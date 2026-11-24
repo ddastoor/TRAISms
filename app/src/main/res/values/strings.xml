@@ -43,6 +43,8 @@
     <string name="always_move_sender_rule">Always move existing and future SMS from %1$s to this tab</string>
     <string name="apply_category_button">Move Conversation</string>
     <string name="sync_progress_label">Encrypting &amp; categorizing SMS (%1$d imported)…</string>
+    <string name="inbox_auto_delete_otp_label">Auto-delete OTP:</string>
+    <string name="inbox_auto_delete_promo_label">Auto-delete Promo:</string>
 
     <!-- Thread & Compose -->
     <string name="reply_placeholder">Write an SMS message…</string>
@@ -82,6 +84,8 @@
     <string name="settings_sms_font_bold_title">Bold SMS text</string>
     <string name="settings_sms_font_bold_subtitle">Render SMS message text in bold weight for higher readability.</string>
     <string name="settings_sms_font_preview_sample">Your OTP is 482910. Parcel arrives by 5:30 PM.</string>
+    <string name="settings_otp_auto_delete_title">OTP Auto-Delete</string>
+    <string name="settings_otp_auto_delete_subtitle">Strictly restricted to unarchived OTP messages. Never touches Personal, Transactional, Service, Promotional, Gov, Unknown, Other, or Archived.</string>
     <string name="app_locked_title">TRAISms Locked</string>
     <string name="app_locked_subtitle">Authenticate with biometrics or device PIN to view encrypted messages.</string>
     <string name="unlock_button">Unlock Inbox</string>

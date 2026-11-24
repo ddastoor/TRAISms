@@ -10,6 +10,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -26,10 +27,12 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.outlined.AutoDelete
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.DeleteForever
 import androidx.compose.material.icons.outlined.DeleteSweep
@@ -48,6 +51,7 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExtendedFloatingActionButton
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -124,7 +128,11 @@ fun MessagesScreen(
     onRequestCountInCurrentTab: suspend (SmsCategory) -> Int,
     onDeleteAllInApp: () -> Unit,
     onTriggerDeviceSync: () -> Unit,
-    onSeedDemoInbox: () -> Unit
+    onSeedDemoInbox: () -> Unit,
+    promoAutoDeleteDays: Int = 7,
+    otpAutoDeleteDays: Int = 0,
+    onUpdatePromoAutoDelete: (Int) -> Unit = {},
+    onUpdateOtpAutoDelete: (Int) -> Unit = {}
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -492,6 +500,83 @@ fun MessagesScreen(
                         }
                     }
                 }
+            }
+
+            if (
+                searchQuery.isBlank() &&
+                (selectedCategory == SmsCategory.OTP || selectedCategory == SmsCategory.PROMOTIONAL)
+            ) {
+                val autoDeletePresets = listOf(
+                    0 to "Off",
+                    1 to "1 Day",
+                    3 to "3 Days",
+                    7 to "7 Days",
+                    15 to "15 Days",
+                    30 to "30 Days"
+                )
+                Surface(
+                    color = MaterialTheme.colorScheme.surfaceContainerLow,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("inbox_auto_delete_bar")
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState())
+                            .padding(horizontal = 14.dp, vertical = 6.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.AutoDelete,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = if (selectedCategory == SmsCategory.OTP) {
+                                stringResource(R.string.inbox_auto_delete_otp_label)
+                            } else {
+                                stringResource(R.string.inbox_auto_delete_promo_label)
+                            },
+                            style = MaterialTheme.typography.labelLarge
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        autoDeletePresets.forEach { (days, label) ->
+                            FilterChip(
+                                selected = (if (selectedCategory == SmsCategory.OTP) otpAutoDeleteDays else promoAutoDeleteDays) == days,
+                                onClick = {
+                                    if (selectedCategory == SmsCategory.OTP) {
+                                        onUpdateOtpAutoDelete(days)
+                                        scope.launch {
+                                            snackbarHostState.showSnackbar(
+                                                if (days == 0) "OTP auto-delete disabled"
+                                                else "OTP SMS older than $label will auto-delete"
+                                            )
+                                        }
+                                    } else {
+                                        onUpdatePromoAutoDelete(days)
+                                        scope.launch {
+                                            snackbarHostState.showSnackbar(
+                                                if (days == 0) "Promotional auto-delete disabled"
+                                                else "Promotional SMS older than $label will auto-delete"
+                                            )
+                                        }
+                                    }
+                                },
+                                label = { Text(label) },
+                                modifier = Modifier
+                                    .padding(end = 6.dp)
+                                    .testTag(
+                                        if (selectedCategory == SmsCategory.OTP) "inbox_otp_preset_$days"
+                                        else "inbox_promo_preset_$days"
+                                    )
+                            )
+                        }
+                    }
+                }
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
             }
 
             Box(
