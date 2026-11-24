@@ -19,7 +19,7 @@ For this repository (`TRAISms`), **`/swarm` is the mandatory default mode for ev
    - Always have `@verifier` verify every active thread before completion, and merge `workspace: "share"` worker commits into your working copy **before** calling `swarm(action="kill")`.
 
 3. **Auto-Commit & Auto-Push Every Finished Change:**
-   - Each time a change is finished and verified by `@verifier`, the coordinator **must** automatically commit all landed changes cleanly and run `git push` to `origin` without waiting to be asked (`workspace: "share"` workers commit locally in their worktrees without pushing; if missing or rejected credentials block `git push`, report the exact error clearly).
+   - Going forward, whenever a change is finished and verified by `@verifier`, the coordinator **must** automatically commit all landed changes with an appropriate, descriptive commit message and run `git push` to `origin` automatically **without asking the user** (`workspace="share"` workers commit locally in their worktrees with an appropriate, descriptive commit message without pushing; the coordinator pushes automatically, and if missing or rejected credentials block `git push`, report the exact error clearly).
 
 4. **When to skip spawning new workers:**
    - Pure Q&A, quick status checks, or when the user explicitly asks to work directly without `/swarm` — while still keeping any existing background Swarm workers from previous prompts running uninterrupted.
