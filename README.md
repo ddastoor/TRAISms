@@ -32,7 +32,7 @@ Each tab includes an independent **Show unread** toggle (enabled by default and 
 2. **Transactional** — Banking, UPI, cards, invoices & TRAI `-T` headers
 3. **Service** — Telecom, deliveries, travel/IRCTC, `127xxx` consent & TRAI `-S` headers
 4. **OTP** — Priority-extracted 4–8 char 2FA/verification codes with one-tap **Copy OTP** chips (with optional 1–30 day auto-cleanup)
-5. **Promotional** — Offers, marketing & TRAI `-P` headers (with 7-day default auto-cleanup)
+5. **Promotional** — Offers, marketing & TRAI `-P` headers (automatically marked as read on arrival, with 7-day default auto-cleanup)
 6. **Government** — Civic advisories, emergency alerts, NHS/GOVUK/IRS/CRA/NDMA & TRAI `-G` headers
 7. **Unknown** — Unsaved raw 7–15 digit phone numbers without alphanumeric headers
 8. **Other** — Safe catch-all for messages below the `0.60` local ML confidence threshold

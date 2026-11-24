@@ -94,6 +94,11 @@ class SmsRepository(
      * Asynchronous chunked import (500 messages per batch on Dispatchers.IO) reading existing
      * SMS messages from `content://sms`, resolving contacts via cached map, running the
      * Multi-Layer Categorization Engine, and saving into SQLCipher-encrypted Room.
+     *
+     * Preserves existing `raw.isRead` states during initial historical import
+     * (`initialSyncCompleted == false`), and automatically marks newly delta-synced
+     * `PROMOTIONAL` messages as read in both SQLCipher Room and `Telephony.Sms` once
+     * initial sync has completed.
      */
     suspend fun syncDeviceSmsInChunks() = withContext(Dispatchers.IO) {
         if (!systemSmsHelper.hasReadSmsPermission()) return@withContext
@@ -104,6 +109,7 @@ class SmsRepository(
             try {
                 contactCache.warmCache(forceRefresh = true)
                 val settings = settingsStore.getSettingsSnapshot()
+                val isPostInitialDeltaSync = settings.initialSyncCompleted
                 val (region, _) = regionDetector.detectActiveRegion(settings.regionOverride)
                 val existingRules = senderRuleDao.getAllRules().associateBy { it.normalizedSender }
                 val alreadyImportedIds = smsDao.getImportedSystemSmsIds().toHashSet()
@@ -114,6 +120,7 @@ class SmsRepository(
                     skipIds = alreadyImportedIds
                 ) { batch ->
                     val entities = ArrayList<SmsMessageEntity>(batch.size)
+                    val promoSystemIdsToMarkRead = ArrayList<Long>()
                     for (raw in batch) {
                         val threadKey = PhoneAndSenderNormalizer.normalizeThreadKey(raw.address)
                         val bodySha = BackupCryptoEngine.sha256Hex(raw.body)
@@ -129,6 +136,14 @@ class SmsRepository(
                             customRuleCategory = ruleCategory,
                             activeRegion = region
                         )
+                        val effectiveIsRead = if (isPostInitialDeltaSync && outcome.category == SmsCategory.PROMOTIONAL) {
+                            true
+                        } else {
+                            raw.isRead
+                        }
+                        if (isPostInitialDeltaSync && outcome.category == SmsCategory.PROMOTIONAL && !raw.isRead) {
+                            promoSystemIdsToMarkRead.add(raw.systemId)
+                        }
                         entities.add(
                             SmsMessageEntity(
                                 systemSmsId = raw.systemId,
@@ -139,7 +154,7 @@ class SmsRepository(
                                 bodySha256 = bodySha,
                                 timestampMillis = raw.timestampMillis,
                                 isIncoming = raw.isIncoming,
-                                isRead = raw.isRead,
+                                isRead = effectiveIsRead,
                                 isArchived = false,
                                 category = outcome.category,
                                 extractedOtp = outcome.extractedOtp,
@@ -150,6 +165,9 @@ class SmsRepository(
                     }
                     if (entities.isNotEmpty()) {
                         smsDao.insertMessages(entities)
+                        if (promoSystemIdsToMarkRead.isNotEmpty()) {
+                            systemSmsHelper.markSystemMessagesRead(promoSystemIdsToMarkRead)
+                        }
                         runningImported += entities.size
                         _syncProgress.value = SyncProgressState(
                             isSyncing = true,
@@ -181,8 +199,10 @@ class SmsRepository(
 
     /**
      * Processes a newly received SMS PDU from `SmsDeliverReceiver`:
-     * writes to system `Telephony.Sms.Inbox`, categorizes via pipeline, saves to SQLCipher Room,
-     * honors `unarchiveOnNewSms`, and dispatches notification.
+     * categorizes via pipeline first, automatically marks `PROMOTIONAL` messages as read
+     * (`isRead = true` strictly when `outcome.category == SmsCategory.PROMOTIONAL`), writes to
+     * system `Telephony.Sms.Inbox`, saves to SQLCipher Room, honors `unarchiveOnNewSms`, and
+     * dispatches notification.
      */
     suspend fun handleIncomingSms(
         rawAddress: String,
@@ -194,14 +214,6 @@ class SmsRepository(
         val settings = settingsStore.getSettingsSnapshot()
         val (region, _) = regionDetector.detectActiveRegion(settings.regionOverride)
 
-        val systemId = systemSmsHelper.insertIntoSystemProvider(
-            address = cleanAddress,
-            body = body,
-            timestampMillis = timestampMillis,
-            isIncoming = true,
-            isRead = false
-        )
-
         val contactName = contactCache.resolveContactName(cleanAddress)
         val rule = senderRuleDao.getRuleForSender(threadKey)
         val outcome = pipeline.categorize(
@@ -210,6 +222,15 @@ class SmsRepository(
             isSavedContact = contactName != null,
             customRuleCategory = rule?.category,
             activeRegion = region
+        )
+        val autoMarkRead = outcome.category == SmsCategory.PROMOTIONAL
+
+        val systemId = systemSmsHelper.insertIntoSystemProvider(
+            address = cleanAddress,
+            body = body,
+            timestampMillis = timestampMillis,
+            isIncoming = true,
+            isRead = autoMarkRead
         )
 
         val wasArchived = smsDao.isThreadCurrentlyArchived(threadKey)
@@ -229,7 +250,7 @@ class SmsRepository(
             bodySha256 = BackupCryptoEngine.sha256Hex(body),
             timestampMillis = timestampMillis,
             isIncoming = true,
-            isRead = false,
+            isRead = autoMarkRead,
             isArchived = keepArchived,
             category = outcome.category,
             extractedOtp = outcome.extractedOtp,

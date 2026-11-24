@@ -33,6 +33,9 @@ To unlock Default SMS access in 3 steps:
 
 ## What's New in v1.0.3
 
+- **Automatic Mark-as-Read for New Promotional Messages:**
+  - Newly received and post-setup delta-synced messages classified into the **Promotional** tab (`outcome.category == SmsCategory.PROMOTIONAL` — via TRAI `-P` headers, local ML promotional detection, or custom Promotional sender rules) are automatically marked as read (`isRead = true` in SQLCipher Room and `READ = 1` in Android's `Telephony.Sms` provider when TRAISms is the Default SMS app) so promotional clutter never inflates unread counts.
+  - Strictly and exclusively scoped to **Promotional** — incoming messages across all 7 other categories (**Personal**, **Transactional**, **Service**, **OTP** including OTPs sent from `-P` headers, **Government**, **Unknown**, and **Other**) remain unread until opened, and initial device inbox imports preserve existing read/unread history.
 - **Per-Category "Show Unread" Toggle (Default: Unread Only):**
   - Added an independent **Show unread** Material 3 filter bar at the top of every category tab (**Personal**, **Transactional**, **Service**, **OTP**, **Promotional**, **Government**, **Unknown**, and **Other**), defaulting to **Unread Only** (`ON`) so each tab highlights unread incoming messages by default while displaying live `Unread only (N)` / `All (N)` counts.
   - Persists each category's toggle state independently in Tink-encrypted DataStore (`AppSettings.categoryShowUnreadOnly`) — toggling **Show unread** off on **Personal** reveals all read **Personal** conversations without affecting **Transactional**, **OTP**, or any other tab, and includes a one-tap **Show all [Category] messages** button whenever a tab has zero unread messages but existing read history.
