@@ -31,6 +31,7 @@ import androidx.compose.material.icons.outlined.Backup
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.DeleteForever
 import androidx.compose.material.icons.outlined.Fingerprint
+import androidx.compose.material.icons.outlined.FormatSize
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Public
 import androidx.compose.material.icons.outlined.Refresh
@@ -76,11 +77,13 @@ import com.example.R
 import com.example.data.crypto.AppSettings
 import com.example.data.crypto.BackupSchedule
 import com.example.data.crypto.LeftSwipeAction
+import com.example.data.crypto.SmsFontSize
 import com.example.data.sms.SystemSmsHelper
 import com.example.ui.common.GlobalDeleteAllMessagesDialog
 import com.example.ui.onboarding.RestrictedSettingsGuidanceCard
 import com.example.ui.theme.EmeraldTertiary
 import com.example.ui.theme.EmeraldTertiaryContainer
+import com.example.ui.theme.smsMessageBodyStyle
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
@@ -101,7 +104,9 @@ fun SettingsScreen(
     onToggleAppLock: (Boolean) -> Unit,
     onToggleBlockScreenshots: (Boolean) -> Unit,
     onRerunCategorization: ((Int) -> Unit) -> Unit,
-    onDeleteAllMessagesInApp: () -> Unit
+    onDeleteAllMessagesInApp: () -> Unit,
+    onUpdateSmsFontSize: (SmsFontSize) -> Unit = {},
+    onUpdateSmsFontBold: (Boolean) -> Unit = {}
 ) {
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
@@ -266,6 +271,62 @@ fun SettingsScreen(
                                 style = MaterialTheme.typography.labelMedium
                             )
                         }
+                    }
+                }
+
+                // SMS TEXT APPEARANCE CARD
+                SettingsGroupCard(
+                    icon = Icons.Outlined.FormatSize,
+                    title = stringResource(R.string.settings_sms_text_title),
+                    subtitle = stringResource(R.string.settings_sms_text_subtitle)
+                ) {
+                    Text(
+                        text = stringResource(R.string.settings_sms_font_size_label),
+                        style = MaterialTheme.typography.labelLarge
+                    )
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        SmsFontSize.entries.forEach { size ->
+                            FilterChip(
+                                selected = settings.smsFontSize == size,
+                                onClick = { onUpdateSmsFontSize(size) },
+                                label = { Text(size.label) },
+                                modifier = Modifier.testTag("sms_font_size_${size.name.lowercase()}")
+                            )
+                        }
+                    }
+
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+
+                    SettingsToggleRow(
+                        title = stringResource(R.string.settings_sms_font_bold_title),
+                        subtitle = stringResource(R.string.settings_sms_font_bold_subtitle),
+                        checked = settings.smsFontBold,
+                        onCheckedChange = onUpdateSmsFontBold,
+                        testTag = "sms_font_bold_switch"
+                    )
+
+                    Surface(
+                        color = MaterialTheme.colorScheme.surface,
+                        shape = RoundedCornerShape(12.dp),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("sms_font_live_preview")
+                    ) {
+                        Text(
+                            text = stringResource(R.string.settings_sms_font_preview_sample),
+                            style = smsMessageBodyStyle(
+                                MaterialTheme.typography.bodyLarge,
+                                settings.smsFontSize,
+                                settings.smsFontBold
+                            ),
+                            modifier = Modifier
+                                .padding(12.dp)
+                                .testTag("sms_font_preview_text")
+                        )
                     }
                 }
 

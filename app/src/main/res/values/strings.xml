@@ -76,6 +76,12 @@
     <!-- Settings -->
     <string name="settings_default_sms_active">Active Default SMS App</string>
     <string name="settings_set_default_btn">Set as Default</string>
+    <string name="settings_sms_text_title">SMS Text Appearance</string>
+    <string name="settings_sms_text_subtitle">Customize SMS message font size and bold weight across conversations and inbox previews.</string>
+    <string name="settings_sms_font_size_label">SMS Text Font Size</string>
+    <string name="settings_sms_font_bold_title">Bold SMS text</string>
+    <string name="settings_sms_font_bold_subtitle">Render SMS message text in bold weight for higher readability.</string>
+    <string name="settings_sms_font_preview_sample">Your OTP is 482910. Parcel arrives by 5:30 PM.</string>
     <string name="app_locked_title">TRAISms Locked</string>
     <string name="app_locked_subtitle">Authenticate with biometrics or device PIN to view encrypted messages.</string>
     <string name="unlock_button">Unlock Inbox</string>

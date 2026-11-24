@@ -190,7 +190,10 @@ class MainActivity : ComponentActivity() {
                 mainViewModel.refreshPermissionsAndSyncIfAuthorized()
             }
 
-            TraiSmsTheme {
+            TraiSmsTheme(
+                smsFontSize = settings.smsFontSize,
+                smsFontBold = settings.smsFontBold
+            ) {
                 TraiSmsPrimaryApp(
                     activity = this@MainActivity,
                     viewModel = mainViewModel,
@@ -523,7 +526,9 @@ fun TraiSmsPrimaryApp(
                         },
                         onToggleBlockScreenshots = viewModel::updateBlockScreenshots,
                         onRerunCategorization = viewModel::rerunCategorizationOnAll,
-                        onDeleteAllMessagesInApp = viewModel::deleteAllMessagesInApp
+                        onDeleteAllMessagesInApp = viewModel::deleteAllMessagesInApp,
+                        onUpdateSmsFontSize = viewModel::updateSmsFontSize,
+                        onUpdateSmsFontBold = viewModel::updateSmsFontBold
                     )
                 }
 

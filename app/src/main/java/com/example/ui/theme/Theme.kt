@@ -6,10 +6,12 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Shapes
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.SideEffect
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowCompat
+import com.example.data.crypto.SmsFontSize
 
 // Strictly Light Mode ONLY per TRAISms architectural specification
 private val TraiSmsLightColorScheme = lightColorScheme(
@@ -54,6 +56,8 @@ val TraiSmsShapes = Shapes(
 
 @Composable
 fun TraiSmsTheme(
+    smsFontSize: SmsFontSize = SmsFontSize.DEFAULT,
+    smsFontBold: Boolean = false,
     content: @Composable () -> Unit
 ) {
     // Hardcode lightColorScheme() and ignore system dark mode completely (darkTheme = false always)
@@ -69,12 +73,19 @@ fun TraiSmsTheme(
         }
     }
 
-    MaterialTheme(
-        colorScheme = TraiSmsLightColorScheme,
-        typography = TraiSmsTypography,
-        shapes = TraiSmsShapes,
-        content = content
-    )
+    CompositionLocalProvider(
+        LocalSmsTextPreferences provides SmsTextStylePreferences(
+            fontSize = smsFontSize,
+            bold = smsFontBold
+        )
+    ) {
+        MaterialTheme(
+            colorScheme = TraiSmsLightColorScheme,
+            typography = TraiSmsTypography,
+            shapes = TraiSmsShapes,
+            content = content
+        )
+    }
 }
 
 // Alias kept for compatibility with existing starter test references

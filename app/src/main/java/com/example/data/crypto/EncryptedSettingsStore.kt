@@ -22,6 +22,13 @@ enum class LeftSwipeAction {
 }
 
 @Serializable
+enum class SmsFontSize(val label: String) {
+    DEFAULT("Default"),
+    LARGE("Large"),
+    LARGER("Larger")
+}
+
+@Serializable
 enum class BackupSchedule(val label: String, val intervalDays: Int) {
     OFF("Off", 0),
     DAILY("Daily", 1),
@@ -49,7 +56,9 @@ data class AppSettings(
     val blockScreenshots: Boolean = true, // ON by default on physical devices; paused on streaming emulator unless forced
     val userForcedFlagSecureInStream: Boolean = false,
     val initialSyncCompleted: Boolean = false,
-    val onboardingDismissed: Boolean = false
+    val onboardingDismissed: Boolean = false,
+    val smsFontSize: SmsFontSize = SmsFontSize.DEFAULT,
+    val smsFontBold: Boolean = false
 )
 
 /**

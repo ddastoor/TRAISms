@@ -64,6 +64,8 @@ import com.example.R
 import com.example.data.sms.ContactLookupCache
 import com.example.data.sms.SimpleContact
 import com.example.ui.theme.JetBrainsMonoFamily
+import com.example.ui.theme.LocalSmsTextPreferences
+import com.example.ui.theme.smsMessageBodyStyle
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -78,6 +80,8 @@ fun ComposeSmsScreen(
     onSendSms: (recipient: String, body: String, onResult: (Result<String>) -> Unit) -> Unit
 ) {
     BackHandler(onBack = onBack)
+
+    val smsTextPrefs = LocalSmsTextPreferences.current
 
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
@@ -143,6 +147,11 @@ fun ComposeSmsScreen(
                     OutlinedTextField(
                         value = messageBody,
                         onValueChange = { messageBody = it },
+                        textStyle = smsMessageBodyStyle(
+                            MaterialTheme.typography.bodyLarge,
+                            smsTextPrefs.fontSize,
+                            smsTextPrefs.bold
+                        ),
                         label = { Text(stringResource(R.string.reply_placeholder)) },
                         minLines = 1,
                         maxLines = 4,

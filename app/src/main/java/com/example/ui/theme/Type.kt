@@ -1,12 +1,14 @@
 package com.example.ui.theme
 
 import androidx.compose.material3.Typography
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 import com.example.R
+import com.example.data.crypto.SmsFontSize
 
 val PlusJakartaFamily = FontFamily(
     Font(R.font.plus_jakarta_sans, FontWeight.Normal),
@@ -100,3 +102,49 @@ val TraiSmsTypography = Typography(
         letterSpacing = 0.3.sp
     )
 )
+
+data class SmsTextStylePreferences(
+    val fontSize: SmsFontSize = SmsFontSize.DEFAULT,
+    val bold: Boolean = false
+)
+
+val LocalSmsTextPreferences = compositionLocalOf { SmsTextStylePreferences() }
+
+fun smsMessageBodyStyle(
+    base: TextStyle,
+    size: SmsFontSize,
+    bold: Boolean
+): TextStyle {
+    val (fontSp, lineSp) = when (size) {
+        SmsFontSize.DEFAULT -> 15.sp to 22.sp
+        SmsFontSize.LARGE -> 18.sp to 26.sp
+        SmsFontSize.LARGER -> 21.sp to 30.sp
+    }
+    return base.copy(
+        fontSize = fontSp,
+        lineHeight = lineSp,
+        fontWeight = if (bold) FontWeight.Bold else FontWeight.Normal
+    )
+}
+
+fun smsSnippetBodyStyle(
+    base: TextStyle,
+    size: SmsFontSize,
+    bold: Boolean,
+    hasUnread: Boolean
+): TextStyle {
+    val (fontSp, lineSp) = when (size) {
+        SmsFontSize.DEFAULT -> 14.sp to 20.sp
+        SmsFontSize.LARGE -> 16.5.sp to 23.sp
+        SmsFontSize.LARGER -> 19.sp to 26.sp
+    }
+    return base.copy(
+        fontSize = fontSp,
+        lineHeight = lineSp,
+        fontWeight = when {
+            bold -> FontWeight.Bold
+            hasUnread -> FontWeight.Medium
+            else -> FontWeight.Normal
+        }
+    )
+}

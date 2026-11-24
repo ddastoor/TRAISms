@@ -52,6 +52,8 @@ import com.example.ui.theme.CategoryOtpFg
 import com.example.ui.theme.EmeraldTertiary
 import com.example.ui.theme.EmeraldTertiaryContainer
 import com.example.ui.theme.JetBrainsMonoFamily
+import com.example.ui.theme.LocalSmsTextPreferences
+import com.example.ui.theme.smsSnippetBodyStyle
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
@@ -69,6 +71,7 @@ fun ThreadRowItem(
     modifier: Modifier = Modifier
 ) {
     val haptic = LocalHapticFeedback.current
+    val smsTextPrefs = LocalSmsTextPreferences.current
     val dismissState = rememberSwipeToDismissBoxState(
         positionalThreshold = { totalDistance -> totalDistance * 0.35f },
         confirmValueChange = { value ->
@@ -254,13 +257,19 @@ fun ThreadRowItem(
                         ) {
                             Text(
                                 text = thread.latestBody,
-                                style = MaterialTheme.typography.bodyMedium,
-                                fontWeight = if (hasUnread) FontWeight.Medium else FontWeight.Normal,
+                                style = smsSnippetBodyStyle(
+                                    MaterialTheme.typography.bodyMedium,
+                                    smsTextPrefs.fontSize,
+                                    smsTextPrefs.bold,
+                                    hasUnread
+                                ),
                                 color = if (hasUnread) MaterialTheme.colorScheme.onSurface
                                 else MaterialTheme.colorScheme.onSurfaceVariant,
                                 maxLines = 2,
                                 overflow = TextOverflow.Ellipsis,
-                                modifier = Modifier.weight(1f)
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .testTag("thread_row_body_${thread.threadKey}")
                             )
 
                             if (hasUnread) {

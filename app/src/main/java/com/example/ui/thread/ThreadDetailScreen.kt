@@ -78,6 +78,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.R
+import com.example.data.crypto.SmsFontSize
 import com.example.data.db.SmsCategory
 import com.example.data.db.SmsMessageEntity
 import com.example.domain.classifier.PhoneAndSenderNormalizer
@@ -88,6 +89,8 @@ import com.example.ui.common.formatFullDateTime
 import com.example.ui.theme.CategoryOtpBg
 import com.example.ui.theme.CategoryOtpFg
 import com.example.ui.theme.JetBrainsMonoFamily
+import com.example.ui.theme.LocalSmsTextPreferences
+import com.example.ui.theme.smsMessageBodyStyle
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
@@ -107,6 +110,7 @@ fun ThreadDetailScreen(
 
     val context = LocalContext.current
     val hapticFeedback = LocalHapticFeedback.current
+    val smsTextPrefs = LocalSmsTextPreferences.current
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
     val listState = rememberLazyListState()
@@ -226,6 +230,11 @@ fun ThreadDetailScreen(
                         OutlinedTextField(
                             value = replyText,
                             onValueChange = { replyText = it },
+                            textStyle = smsMessageBodyStyle(
+                                MaterialTheme.typography.bodyLarge,
+                                smsTextPrefs.fontSize,
+                                smsTextPrefs.bold
+                            ),
                             placeholder = { Text(stringResource(R.string.reply_placeholder)) },
                             maxLines = 4,
                             shape = RoundedCornerShape(20.dp),
@@ -316,7 +325,7 @@ fun ThreadDetailScreen(
                         else MaterialTheme.colorScheme.onPrimary,
                         shape = bubbleShape,
                         modifier = Modifier
-                            .widthIn(max = 340.dp)
+                            .widthIn(max = if (smsTextPrefs.fontSize == SmsFontSize.DEFAULT) 340.dp else 368.dp)
                             .clip(bubbleShape)
                             .combinedClickable(
                                 onClick = {},
@@ -330,7 +339,12 @@ fun ThreadDetailScreen(
                         Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
                             Text(
                                 text = msg.body,
-                                style = MaterialTheme.typography.bodyLarge
+                                style = smsMessageBodyStyle(
+                                    MaterialTheme.typography.bodyLarge,
+                                    smsTextPrefs.fontSize,
+                                    smsTextPrefs.bold
+                                ),
+                                modifier = Modifier.testTag("thread_message_text_${msg.id}")
                             )
 
                             msg.extractedOtp?.let { otpCode ->

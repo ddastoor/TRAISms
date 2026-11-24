@@ -8,6 +8,7 @@ import com.example.AppContainer
 import com.example.data.crypto.AppSettings
 import com.example.data.crypto.BackupSchedule
 import com.example.data.crypto.LeftSwipeAction
+import com.example.data.crypto.SmsFontSize
 import com.example.data.db.CategoryUnreadCount
 import com.example.data.db.SmsCategory
 import com.example.data.db.SmsMessageEntity
@@ -287,6 +288,18 @@ class MainViewModel(
     fun updateUnarchiveOnNewSms(enabled: Boolean) {
         viewModelScope.launch {
             settingsStore.updateSettings { it.copy(unarchiveOnNewSms = enabled) }
+        }
+    }
+
+    fun updateSmsFontSize(size: SmsFontSize) {
+        viewModelScope.launch {
+            settingsStore.updateSettings { it.copy(smsFontSize = size) }
+        }
+    }
+
+    fun updateSmsFontBold(bold: Boolean) {
+        viewModelScope.launch {
+            settingsStore.updateSettings { it.copy(smsFontBold = bold) }
         }
     }
 
