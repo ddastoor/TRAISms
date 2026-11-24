@@ -80,10 +80,13 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.toRoute
+import com.example.data.db.SmsCategory
 import com.example.data.sms.SmsNotificationHelper
+import com.example.ui.AssignCategoryRequest
 import com.example.ui.MainViewModel
 import com.example.ui.archive.ArchiveScreen
 import com.example.ui.backup.BackupScreen
+import com.example.ui.common.MoveSenderCategoryBottomSheet
 import com.example.ui.messages.MessagesScreen
 import com.example.ui.onboarding.OnboardingScreen
 import com.example.ui.settings.SettingsScreen
@@ -120,7 +123,8 @@ data class ComposeSmsRoute(
 data class PendingExternalAction(
     val openThreadKey: String? = null,
     val composeRecipient: String? = null,
-    val composeBody: String? = null
+    val composeBody: String? = null,
+    val assignCategoryRequest: AssignCategoryRequest? = null
 )
 
 /**
@@ -206,8 +210,64 @@ class MainActivity : ComponentActivity() {
     private fun parseExternalIntent(intent: Intent?): PendingExternalAction? {
         if (intent == null) return null
 
-        val threadKeyExtra = intent.getStringExtra(SmsNotificationHelper.EXTRA_OPEN_THREAD_KEY)
-        if (!threadKeyExtra.isNullOrBlank()) {
+        val hadNotificationIdExtra = intent.hasExtra(SmsNotificationHelper.EXTRA_NOTIFICATION_ID)
+        if (hadNotificationIdExtra) {
+            val notificationId = intent.getIntExtra(SmsNotificationHelper.EXTRA_NOTIFICATION_ID, 0)
+            SmsNotificationHelper.cancelNotification(this, notificationId)
+            intent.removeExtra(SmsNotificationHelper.EXTRA_NOTIFICATION_ID)
+        }
+
+        if (intent.action == SmsNotificationHelper.ACTION_ASSIGN_CATEGORY) {
+            val threadKey = intent.getStringExtra(SmsNotificationHelper.EXTRA_THREAD_KEY)?.trim().orEmpty()
+            val rawAddress = intent.getStringExtra(SmsNotificationHelper.EXTRA_RAW_ADDRESS)
+                ?.trim()
+                ?.takeIf { it.isNotEmpty() }
+                ?: threadKey
+            val senderTitle = intent.getStringExtra(SmsNotificationHelper.EXTRA_SENDER_TITLE)
+                ?.trim()
+                ?.takeIf { it.isNotEmpty() }
+                ?: rawAddress
+            val currentCategory = intent.getStringExtra(SmsNotificationHelper.EXTRA_CURRENT_CATEGORY)
+                ?.trim()
+                ?.let { raw -> runCatching { SmsCategory.valueOf(raw) }.getOrNull() }
+                ?: SmsCategory.OTHER
+
+            if (!hadNotificationIdExtra && threadKey.isNotEmpty()) {
+                SmsNotificationHelper.cancelNotification(
+                    this,
+                    SmsNotificationHelper.notificationIdForThread(threadKey)
+                )
+            }
+
+            intent.action = null
+            intent.removeExtra(SmsNotificationHelper.EXTRA_MESSAGE_ID)
+            intent.removeExtra(SmsNotificationHelper.EXTRA_THREAD_KEY)
+            intent.removeExtra(SmsNotificationHelper.EXTRA_RAW_ADDRESS)
+            intent.removeExtra(SmsNotificationHelper.EXTRA_SENDER_TITLE)
+            intent.removeExtra(SmsNotificationHelper.EXTRA_CURRENT_CATEGORY)
+
+            if (threadKey.isNotEmpty()) {
+                return PendingExternalAction(
+                    assignCategoryRequest = AssignCategoryRequest(
+                        threadKey = threadKey,
+                        rawAddress = rawAddress,
+                        senderTitle = senderTitle,
+                        currentCategory = currentCategory
+                    )
+                )
+            }
+            return null
+        }
+
+        val threadKeyExtra = intent.getStringExtra(SmsNotificationHelper.EXTRA_OPEN_THREAD_KEY)?.trim()
+        if (!threadKeyExtra.isNullOrEmpty()) {
+            if (!hadNotificationIdExtra) {
+                SmsNotificationHelper.cancelNotification(
+                    this,
+                    SmsNotificationHelper.notificationIdForThread(threadKeyExtra)
+                )
+            }
+            intent.removeExtra(SmsNotificationHelper.EXTRA_OPEN_THREAD_KEY)
             return PendingExternalAction(openThreadKey = threadKeyExtra)
         }
 
@@ -291,8 +351,21 @@ fun TraiSmsPrimaryApp(
     val activeRegionBadge by viewModel.activeRegionBadge.collectAsStateWithLifecycle()
     val syncProgress by viewModel.syncProgress.collectAsStateWithLifecycle()
     val isBackupInProgress by viewModel.isBackupInProgress.collectAsStateWithLifecycle()
+    val pendingAssignCategory by viewModel.pendingAssignCategory.collectAsStateWithLifecycle()
 
     var isSessionUnlocked by rememberSaveable { mutableStateOf(false) }
+
+    LaunchedEffect(pendingExternalAction) {
+        val assignReq = pendingExternalAction?.assignCategoryRequest ?: return@LaunchedEffect
+        viewModel.requestAssignCategory(assignReq)
+        if (
+            pendingExternalAction.openThreadKey.isNullOrBlank() &&
+            pendingExternalAction.composeRecipient == null &&
+            pendingExternalAction.composeBody == null
+        ) {
+            onConsumeExternalAction()
+        }
+    }
 
     LaunchedEffect(settings.appLockEnabled) {
         if (settings.appLockEnabled && !isSessionUnlocked) {
@@ -571,6 +644,24 @@ fun TraiSmsPrimaryApp(
                 )
             }
         }
+    }
+
+    pendingAssignCategory?.let { req ->
+        MoveSenderCategoryBottomSheet(
+            senderTitle = req.senderTitle,
+            currentCategory = req.currentCategory,
+            onDismiss = viewModel::dismissAssignCategory,
+            onConfirm = { chosenCat, saveRule ->
+                viewModel.dismissAssignCategory()
+                viewModel.assignSenderCategory(
+                    threadKey = req.threadKey,
+                    senderTitle = req.senderTitle,
+                    targetCategory = chosenCat,
+                    savePermanentRule = saveRule
+                )
+                viewModel.selectCategory(chosenCat)
+            }
+        )
     }
 }
 
