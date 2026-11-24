@@ -1,18 +1,19 @@
 # TRAISms Project Rules
 
-## Default Workflow: Swarm-First Coordination
+## Default Agent Mode: `/swarm` (Mandatory Swarm-First Coordination)
 
-For this repository (`TRAISms`), use **Swarm** as the default way of working on any non-trivial task (feature implementation, multi-file edits, refactors, bug investigations, UI changes, or release work):
+For this repository (`TRAISms`), **`/swarm` is the default mode for all agents** on any non-trivial task (feature implementation, multi-file edits, refactors, bug investigations, UI changes, tests, or release work) — even when the user does not explicitly prefix their message with `/swarm`:
 
-1. **Act as the Swarm Coordinator by default:**
-   - Before adding workers, load the `swarm_pane` skill and set a concise swarm title with `swarm(action="title")`.
-   - Split the task into non-overlapping pieces owned by named workers (e.g., `@classifier`, `@ui`, `@crypto`, `@tests`, `@docs`).
+1. **Mandatory First Step — Load `.agents/skills/swarm-default/SKILL.md` & `swarm_pane`:**
+   - At the start of every non-trivial task, you **MUST** read `.agents/skills/swarm-default/SKILL.md` and the built-in `swarm_pane` skill before making edits.
+   - Follow `.agents/skills/swarm-default/SKILL.md` to initialize the Swarm immediately with `swarm(action="title", ...)` and spawn named workers via `swarm(action="add", ...)`.
+   - Split the task into non-overlapping pieces owned by named workers (e.g., `@classifier`, `@ui`, `@crypto`, `@tests`, `@docs-release`).
    - Give workers editing or building concurrently their own working copy (`workspace: "share"`); keep read-only investigators and verifiers on `workspace: "inherit"`.
    - Write the swarm overview plan to `<appData>/brain/<conversation-id>/.system_generated/swarm/plan.json` as documented in `swarm_pane`.
    - Always include a `@verifier` worker to review diffs, verify Android/security invariants, and check tests before reporting completion.
-   - Keep all coordination on the shared Swarm board (`@name` / `@all` mentions) and summarize progress cleanly for the user.
+   - Keep all coordination on the shared Swarm board (`@name` / `@all` mentions), land `workspace: "share"` worker commits into your working copy before killing workers, and summarize progress cleanly for the user.
 
-2. **When to skip Swarm:**
+2. **When to skip `/swarm`:**
    - Pure Q&A, quick status checks, single-command lookups, or tiny single-file/one-line edits where spawning workers adds overhead with no parallelism or verification benefit.
    - Whenever the user explicitly asks to work directly without a swarm.
 
