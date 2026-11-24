@@ -73,7 +73,9 @@ fun ArchiveScreen(
     onSetThreadArchived: (String, Boolean) -> Unit,
     onSetThreadsArchived: (List<String>, Boolean) -> Unit,
     onDeleteThreads: (List<String>) -> Unit,
-    onAssignSenderCategory: (threadKey: String, senderTitle: String, target: SmsCategory, alwaysRule: Boolean) -> Unit
+    onAssignSenderCategory: (threadKey: String, senderTitle: String, target: SmsCategory, alwaysRule: Boolean) -> Unit,
+    leftSwipeAction: LeftSwipeAction = LeftSwipeAction.ARCHIVE,
+    rightSwipeAction: LeftSwipeAction = LeftSwipeAction.ASSIGN_CATEGORY
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -82,6 +84,39 @@ fun ArchiveScreen(
     var searchQuery by remember { mutableStateOf("") }
     var selectedThreadKeys by remember { mutableStateOf<Set<String>>(emptySet()) }
     var moveSheetTarget by remember { mutableStateOf<ThreadSummary?>(null) }
+
+    fun executeArchiveSwipeAction(action: LeftSwipeAction, swiped: ThreadSummary) {
+        val senderTitle = swiped.contactName ?: swiped.rawAddress
+        when (action) {
+            LeftSwipeAction.ARCHIVE -> {
+                selectedThreadKeys = selectedThreadKeys - swiped.threadKey
+                onSetThreadArchived(swiped.threadKey, false)
+                scope.launch {
+                    val res = snackbarHostState.showSnackbar(
+                        message = "Unarchived $senderTitle to ${swiped.category.title}",
+                        actionLabel = "Undo",
+                        duration = SnackbarDuration.Short
+                    )
+                    if (res == SnackbarResult.ActionPerformed) {
+                        onSetThreadArchived(swiped.threadKey, true)
+                    }
+                }
+            }
+            LeftSwipeAction.DELETE -> {
+                selectedThreadKeys = selectedThreadKeys - swiped.threadKey
+                onDeleteThreads(listOf(swiped.threadKey))
+                scope.launch {
+                    snackbarHostState.showSnackbar(
+                        message = "Deleted conversation with $senderTitle",
+                        duration = SnackbarDuration.Short
+                    )
+                }
+            }
+            LeftSwipeAction.ASSIGN_CATEGORY -> {
+                moveSheetTarget = swiped
+            }
+        }
+    }
 
     val filteredThreads by remember(archivedThreads, searchQuery) {
         derivedStateOf {
@@ -242,7 +277,8 @@ fun ArchiveScreen(
                         ThreadRowItem(
                             thread = thread,
                             isArchiveScreen = true,
-                            leftSwipeAction = LeftSwipeAction.ARCHIVE,
+                            leftSwipeAction = leftSwipeAction,
+                            rightSwipeAction = rightSwipeAction,
                             showCategoryPill = true,
                             isSelected = isSelected,
                             onClick = {
@@ -273,21 +309,10 @@ fun ArchiveScreen(
                                 }
                             },
                             onSwipeLeftAction = { swiped ->
-                                val senderTitle = swiped.contactName ?: swiped.rawAddress
-                                onSetThreadArchived(swiped.threadKey, false)
-                                scope.launch {
-                                    val res = snackbarHostState.showSnackbar(
-                                        message = "Unarchived $senderTitle to ${swiped.category.title}",
-                                        actionLabel = "Undo",
-                                        duration = SnackbarDuration.Short
-                                    )
-                                    if (res == SnackbarResult.ActionPerformed) {
-                                        onSetThreadArchived(swiped.threadKey, true)
-                                    }
-                                }
+                                executeArchiveSwipeAction(leftSwipeAction, swiped)
                             },
-                            onSwipeRightAssignCategory = { swiped ->
-                                moveSheetTarget = swiped
+                            onSwipeRightAction = { swiped ->
+                                executeArchiveSwipeAction(rightSwipeAction, swiped)
                             }
                         )
                         HorizontalDivider(

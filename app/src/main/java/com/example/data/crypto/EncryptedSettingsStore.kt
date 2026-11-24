@@ -17,10 +17,13 @@ import java.io.InputStream
 import java.io.OutputStream
 
 @Serializable
-enum class LeftSwipeAction {
-    ARCHIVE,
-    DELETE
+enum class LeftSwipeAction(val label: String) {
+    ARCHIVE("Archive"),
+    DELETE("Delete"),
+    ASSIGN_CATEGORY("Assign Category")
 }
+
+typealias SwipeAction = LeftSwipeAction
 
 @Serializable
 enum class SmsFontSize(val label: String) {
@@ -61,7 +64,8 @@ data class AppSettings(
     val onboardingDismissed: Boolean = false,
     val smsFontSize: SmsFontSize = SmsFontSize.DEFAULT,
     val smsFontBold: Boolean = false,
-    val categoryShowUnreadOnly: Map<String, Boolean> = emptyMap() // Per-tab Show Unread toggle; absent keys default to true = Unread Only
+    val categoryShowUnreadOnly: Map<String, Boolean> = emptyMap(), // Per-tab Show Unread toggle; absent keys default to true = Unread Only
+    val rightSwipeAction: LeftSwipeAction = LeftSwipeAction.ASSIGN_CATEGORY
 ) {
     fun isCategoryUnreadOnly(category: SmsCategory): Boolean =
         categoryShowUnreadOnly[category.name] ?: true

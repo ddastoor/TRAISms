@@ -452,6 +452,7 @@ fun TraiSmsPrimaryApp(
                         totalMessageCount = totalMessageCount,
                         searchQuery = searchQuery,
                         leftSwipeAction = settings.leftSwipeAction,
+                        rightSwipeAction = settings.rightSwipeAction,
                         activeRegionBadge = activeRegionBadge,
                         syncProgress = syncProgress,
                         isDefaultSmsApp = isDefaultSmsApp,
@@ -489,7 +490,9 @@ fun TraiSmsPrimaryApp(
                         onSetThreadArchived = viewModel::setThreadArchived,
                         onSetThreadsArchived = viewModel::setThreadsArchived,
                         onDeleteThreads = viewModel::deleteThreads,
-                        onAssignSenderCategory = viewModel::assignSenderCategory
+                        onAssignSenderCategory = viewModel::assignSenderCategory,
+                        leftSwipeAction = settings.leftSwipeAction,
+                        rightSwipeAction = settings.rightSwipeAction
                     )
                 }
 
@@ -516,6 +519,7 @@ fun TraiSmsPrimaryApp(
                         onRefreshRoleStatus = viewModel::refreshPermissionsAndSyncIfAuthorized,
                         onUpdatePromoAutoDelete = viewModel::updatePromoAutoDeleteDays,
                         onUpdateLeftSwipeAction = viewModel::updateLeftSwipeAction,
+                        onUpdateRightSwipeAction = viewModel::updateRightSwipeAction,
                         onUpdateUnarchiveOnNewSms = viewModel::updateUnarchiveOnNewSms,
                         onUpdateRegionOverride = viewModel::updateRegionOverride,
                         onUpdateBackupSchedule = viewModel::updateBackupSchedule,

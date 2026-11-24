@@ -97,6 +97,7 @@ fun SettingsScreen(
     onRefreshRoleStatus: () -> Unit,
     onUpdatePromoAutoDelete: (Int) -> Unit,
     onUpdateLeftSwipeAction: (LeftSwipeAction) -> Unit,
+    onUpdateRightSwipeAction: (LeftSwipeAction) -> Unit = {},
     onUpdateUnarchiveOnNewSms: (Boolean) -> Unit,
     onUpdateRegionOverride: (String) -> Unit,
     onUpdateBackupSchedule: (BackupSchedule, Int) -> Unit,
@@ -393,13 +394,16 @@ fun SettingsScreen(
                 SettingsGroupCard(
                     icon = Icons.Outlined.Swipe,
                     title = "Swipe Gestures & Archive",
-                    subtitle = "Configure inbox swipe actions and incoming archive behavior."
+                    subtitle = "Independently configure left and right swipe actions across Inbox and Archive, plus incoming archive behavior."
                 ) {
                     Text(
-                        text = "Left Swipe Action (Inbox)",
+                        text = "Left Swipe Action (Inbox & Archive)",
                         style = MaterialTheme.typography.labelLarge
                     )
-                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
                         FilterChip(
                             selected = settings.leftSwipeAction == LeftSwipeAction.ARCHIVE,
                             onClick = { onUpdateLeftSwipeAction(LeftSwipeAction.ARCHIVE) },
@@ -412,28 +416,42 @@ fun SettingsScreen(
                             label = { Text("Delete") },
                             modifier = Modifier.testTag("swipe_left_delete_chip")
                         )
+                        FilterChip(
+                            selected = settings.leftSwipeAction == LeftSwipeAction.ASSIGN_CATEGORY,
+                            onClick = { onUpdateLeftSwipeAction(LeftSwipeAction.ASSIGN_CATEGORY) },
+                            label = { Text("Assign Category") },
+                            modifier = Modifier.testTag("swipe_left_assign_category_chip")
+                        )
                     }
 
-                    Surface(
-                        color = MaterialTheme.colorScheme.surface,
-                        shape = RoundedCornerShape(10.dp),
-                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-                        modifier = Modifier.fillMaxWidth()
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+
+                    Text(
+                        text = "Right Swipe Action (Inbox & Archive)",
+                        style = MaterialTheme.typography.labelLarge
+                    )
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp)
-                        ) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text("Right Swipe Action", style = MaterialTheme.typography.labelLarge)
-                                Text(
-                                    "Assign Sender Category Rule (Modal Sheet)",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                        }
+                        FilterChip(
+                            selected = settings.rightSwipeAction == LeftSwipeAction.ARCHIVE,
+                            onClick = { onUpdateRightSwipeAction(LeftSwipeAction.ARCHIVE) },
+                            label = { Text("Archive") },
+                            modifier = Modifier.testTag("swipe_right_archive_chip")
+                        )
+                        FilterChip(
+                            selected = settings.rightSwipeAction == LeftSwipeAction.DELETE,
+                            onClick = { onUpdateRightSwipeAction(LeftSwipeAction.DELETE) },
+                            label = { Text("Delete") },
+                            modifier = Modifier.testTag("swipe_right_delete_chip")
+                        )
+                        FilterChip(
+                            selected = settings.rightSwipeAction == LeftSwipeAction.ASSIGN_CATEGORY,
+                            onClick = { onUpdateRightSwipeAction(LeftSwipeAction.ASSIGN_CATEGORY) },
+                            label = { Text("Assign Category (Default)") },
+                            modifier = Modifier.testTag("swipe_right_assign_category_chip")
+                        )
                     }
 
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)

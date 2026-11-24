@@ -325,6 +325,12 @@ class MainViewModel(
         }
     }
 
+    fun updateRightSwipeAction(action: LeftSwipeAction) {
+        viewModelScope.launch {
+            settingsStore.updateSettings { it.copy(rightSwipeAction = action) }
+        }
+    }
+
     fun updateUnarchiveOnNewSms(enabled: Boolean) {
         viewModelScope.launch {
             settingsStore.updateSettings { it.copy(unarchiveOnNewSms = enabled) }

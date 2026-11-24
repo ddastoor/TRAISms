@@ -34,9 +34,13 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.testTag
@@ -55,36 +59,89 @@ import com.example.ui.theme.JetBrainsMonoFamily
 import com.example.ui.theme.LocalSmsTextPreferences
 import com.example.ui.theme.smsSnippetBodyStyle
 
+private data class SwipeActionVisualSpec(
+    val bgColor: Color,
+    val label: String,
+    val icon: ImageVector,
+    val tint: Color
+)
+
+@Composable
+private fun resolveSwipeActionVisualSpec(
+    action: LeftSwipeAction,
+    isArchiveScreen: Boolean
+): SwipeActionVisualSpec = when (action) {
+    LeftSwipeAction.ARCHIVE -> if (isArchiveScreen) {
+        SwipeActionVisualSpec(
+            bgColor = EmeraldTertiaryContainer,
+            label = "Unarchive",
+            icon = Icons.Outlined.Unarchive,
+            tint = EmeraldTertiary
+        )
+    } else {
+        SwipeActionVisualSpec(
+            bgColor = MaterialTheme.colorScheme.primaryContainer,
+            label = "Archive",
+            icon = Icons.Outlined.Archive,
+            tint = MaterialTheme.colorScheme.primary
+        )
+    }
+    LeftSwipeAction.DELETE -> SwipeActionVisualSpec(
+        bgColor = MaterialTheme.colorScheme.errorContainer,
+        label = "Delete",
+        icon = Icons.Outlined.DeleteOutline,
+        tint = MaterialTheme.colorScheme.error
+    )
+    LeftSwipeAction.ASSIGN_CATEGORY -> SwipeActionVisualSpec(
+        bgColor = MaterialTheme.colorScheme.secondaryContainer,
+        label = "Assign Category",
+        icon = Icons.Outlined.DriveFileMove,
+        tint = MaterialTheme.colorScheme.onSecondaryContainer
+    )
+}
+
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun ThreadRowItem(
     thread: ThreadSummary,
     isArchiveScreen: Boolean,
     leftSwipeAction: LeftSwipeAction,
+    rightSwipeAction: LeftSwipeAction = LeftSwipeAction.ASSIGN_CATEGORY,
     showCategoryPill: Boolean,
     isSelected: Boolean = false,
     onClick: () -> Unit,
     onLongClick: (() -> Unit)? = null,
     onCopyOtp: (String) -> Unit,
     onSwipeLeftAction: (ThreadSummary) -> Unit,
-    onSwipeRightAssignCategory: (ThreadSummary) -> Unit,
+    onSwipeRightAssignCategory: (ThreadSummary) -> Unit = {},
+    onSwipeRightAction: ((ThreadSummary) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val haptic = LocalHapticFeedback.current
     val smsTextPrefs = LocalSmsTextPreferences.current
+    val currentThread by rememberUpdatedState(thread)
+    val currentOnSwipeLeft by rememberUpdatedState(onSwipeLeftAction)
+    val currentOnSwipeRight by rememberUpdatedState(onSwipeRightAction)
+    val currentOnSwipeRightLegacy by rememberUpdatedState(onSwipeRightAssignCategory)
+
     val dismissState = rememberSwipeToDismissBoxState(
         positionalThreshold = { totalDistance -> totalDistance * 0.35f },
         confirmValueChange = { value ->
             when (value) {
                 SwipeToDismissBoxValue.EndToStart -> {
                     haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                    onSwipeLeftAction(thread)
+                    currentOnSwipeLeft(currentThread)
                     false // Snap cleanly while list updates via reactive Room Flow
                 }
                 SwipeToDismissBoxValue.StartToEnd -> {
                     haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                    onSwipeRightAssignCategory(thread)
-                    false // Snap back and open Move Sender Category sheet
+                    val rightHandler = currentOnSwipeRight
+                    if (rightHandler != null) {
+                        rightHandler(currentThread)
+                    } else {
+                        currentOnSwipeRightLegacy(currentThread)
+                    }
+                    false // Snap back cleanly after executing configured right-swipe action
                 }
                 SwipeToDismissBoxValue.Settled -> false
             }
@@ -101,13 +158,18 @@ fun ThreadRowItem(
             val isStartToEnd = direction == SwipeToDismissBoxValue.StartToEnd
             val isEndToStart = direction == SwipeToDismissBoxValue.EndToStart
 
-            val bgColor = when {
-                isStartToEnd -> MaterialTheme.colorScheme.secondaryContainer
-                isEndToStart && isArchiveScreen -> EmeraldTertiaryContainer
-                isEndToStart && leftSwipeAction == LeftSwipeAction.DELETE -> MaterialTheme.colorScheme.errorContainer
-                isEndToStart -> MaterialTheme.colorScheme.primaryContainer
-                else -> MaterialTheme.colorScheme.surfaceContainerLow
+            val activeSpec = when {
+                isStartToEnd -> resolveSwipeActionVisualSpec(
+                    action = rightSwipeAction,
+                    isArchiveScreen = isArchiveScreen
+                )
+                isEndToStart -> resolveSwipeActionVisualSpec(
+                    action = leftSwipeAction,
+                    isArchiveScreen = isArchiveScreen
+                )
+                else -> null
             }
+            val bgColor = activeSpec?.bgColor ?: MaterialTheme.colorScheme.surfaceContainerLow
 
             Box(
                 modifier = Modifier
@@ -115,53 +177,38 @@ fun ThreadRowItem(
                     .background(bgColor)
                     .padding(horizontal = 20.dp)
             ) {
-                if (isStartToEnd) {
+                if (isStartToEnd && activeSpec != null) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier.align(Alignment.CenterStart)
                     ) {
                         Icon(
-                            imageVector = Icons.Outlined.DriveFileMove,
-                            contentDescription = "Assign sender category rule",
-                            tint = MaterialTheme.colorScheme.onSecondaryContainer
+                            imageVector = activeSpec.icon,
+                            contentDescription = activeSpec.label,
+                            tint = activeSpec.tint
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = "Assign Category",
+                            text = activeSpec.label,
                             style = MaterialTheme.typography.labelLarge,
-                            color = MaterialTheme.colorScheme.onSecondaryContainer
+                            color = activeSpec.tint
                         )
                     }
-                } else if (isEndToStart) {
+                } else if (isEndToStart && activeSpec != null) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier.align(Alignment.CenterEnd)
                     ) {
-                        val label = when {
-                            isArchiveScreen -> "Unarchive"
-                            leftSwipeAction == LeftSwipeAction.DELETE -> "Delete"
-                            else -> "Archive"
-                        }
-                        val icon = when {
-                            isArchiveScreen -> Icons.Outlined.Unarchive
-                            leftSwipeAction == LeftSwipeAction.DELETE -> Icons.Outlined.DeleteOutline
-                            else -> Icons.Outlined.Archive
-                        }
-                        val tint = when {
-                            isArchiveScreen -> EmeraldTertiary
-                            leftSwipeAction == LeftSwipeAction.DELETE -> MaterialTheme.colorScheme.error
-                            else -> MaterialTheme.colorScheme.primary
-                        }
                         Text(
-                            text = label,
+                            text = activeSpec.label,
                             style = MaterialTheme.typography.labelLarge,
-                            color = tint
+                            color = activeSpec.tint
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Icon(
-                            imageVector = icon,
-                            contentDescription = label,
-                            tint = tint
+                            imageVector = activeSpec.icon,
+                            contentDescription = activeSpec.label,
+                            tint = activeSpec.tint
                         )
                     }
                 }
