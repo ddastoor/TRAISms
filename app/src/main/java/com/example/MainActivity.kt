@@ -345,6 +345,7 @@ fun TraiSmsPrimaryApp(
     val isDefaultSmsApp by viewModel.isDefaultSmsApp.collectAsStateWithLifecycle()
     val showEmulatorDemo by viewModel.showEmulatorDemoOption.collectAsStateWithLifecycle()
     val selectedCategory by viewModel.selectedCategory.collectAsStateWithLifecycle()
+    val currentCategoryUnreadOnly by viewModel.currentCategoryUnreadOnly.collectAsStateWithLifecycle()
     val searchQuery by viewModel.searchQuery.collectAsStateWithLifecycle()
     val activeThreads by viewModel.activeThreads.collectAsStateWithLifecycle()
     val archivedThreads by viewModel.archivedThreads.collectAsStateWithLifecycle()
@@ -474,7 +475,9 @@ fun TraiSmsPrimaryApp(
                         promoAutoDeleteDays = settings.promoAutoDeleteDays,
                         otpAutoDeleteDays = settings.otpAutoDeleteDays,
                         onUpdatePromoAutoDelete = viewModel::updatePromoAutoDeleteDays,
-                        onUpdateOtpAutoDelete = viewModel::updateOtpAutoDeleteDays
+                        onUpdateOtpAutoDelete = viewModel::updateOtpAutoDeleteDays,
+                        showUnreadOnly = currentCategoryUnreadOnly,
+                        onToggleCategoryUnreadOnly = viewModel::updateCategoryUnreadOnly
                     )
                 }
 

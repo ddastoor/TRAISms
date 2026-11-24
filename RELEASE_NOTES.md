@@ -33,6 +33,9 @@ To unlock Default SMS access in 3 steps:
 
 ## What's New in v1.0.3
 
+- **Per-Category "Show Unread" Toggle (Default: Unread Only):**
+  - Added an independent **Show unread** Material 3 filter bar at the top of every category tab (**Personal**, **Transactional**, **Service**, **OTP**, **Promotional**, **Government**, **Unknown**, and **Other**), defaulting to **Unread Only** (`ON`) so each tab highlights unread incoming messages by default while displaying live `Unread only (N)` / `All (N)` counts.
+  - Persists each category's toggle state independently in Tink-encrypted DataStore (`AppSettings.categoryShowUnreadOnly`) — toggling **Show unread** off on **Personal** reveals all read **Personal** conversations without affecting **Transactional**, **OTP**, or any other tab, and includes a one-tap **Show all [Category] messages** button whenever a tab has zero unread messages but existing read history.
 - **OTP Auto-Delete (`Off`, `1`, `3`, `7`, `15`, `30` Days) & In-Tab Auto-Delete Bar:**
   - Added configurable **OTP Auto-Delete** (`Off` [Default], `1`, `3`, `7`, `15`, or `30` Days) directly inside an in-tab quick-preset bar at the top of the **OTP** tab (alongside a matching quick-preset bar on the **Promotional** tab) as well as under **Settings → OTP Auto-Delete**.
   - Powered by a periodic 12-hour offline `OtpCleanupWorker` (`WorkManager` with `NetworkType.NOT_REQUIRED`) plus immediate purge on preset selection, surgically restricted to unarchived **OTP** messages in both SQLCipher Room and the system `Telephony.Sms` provider — never touching **Personal**, **Transactional**, **Service**, **Promotional**, **Government**, **Unknown**, **Other**, or **Archived** messages.
@@ -70,6 +73,7 @@ Every incoming and imported SMS is evaluated completely offline in strict waterf
 
 ### 3. Fast Material 3 Light UI & Smart Controls
 - **Strict High-Contrast Light Mode:** Crisp `Plus Jakarta Sans` + `JetBrains Mono` typography and indexed Room queries for instant scrolling.
+- **Per-Tab Unread Filter:** Independent **Show unread** toggle across all 8 tabs (enabled by default) backed by Tink-encrypted DataStore preferences and one-tap read-history expansion.
 - **Swipe Gestures:** Swipe Left to **Archive** (or **Delete**) with Undo; Swipe Right to open **Move Sender Category** and save permanent sender rules.
 - **Targeted Promotional & OTP Auto-Delete:** Independent periodic 12-hour offline `WorkManager` cleanup schedules strictly restricted to unarchived **Promotional** (`7` days default) and unarchived **OTP** (`Off` default) messages (`Off`, `1`, `3`, `7`, `15`, or `30` days), configurable directly from in-tab preset bars and **Settings**.
 - **Bulk Hygiene:** Per-tab *Delete all in [Tab]* action and two-step *Delete All Messages in App* guarded by `DELETE` confirmation.

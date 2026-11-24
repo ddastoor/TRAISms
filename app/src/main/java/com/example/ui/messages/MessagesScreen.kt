@@ -10,6 +10,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -37,6 +38,7 @@ import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.DeleteForever
 import androidx.compose.material.icons.outlined.DeleteSweep
 import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material.icons.outlined.MarkEmailUnread
 import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material.icons.outlined.Science
 import androidx.compose.material.icons.outlined.Search
@@ -66,6 +68,7 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -132,11 +135,16 @@ fun MessagesScreen(
     promoAutoDeleteDays: Int = 7,
     otpAutoDeleteDays: Int = 0,
     onUpdatePromoAutoDelete: (Int) -> Unit = {},
-    onUpdateOtpAutoDelete: (Int) -> Unit = {}
+    onUpdateOtpAutoDelete: (Int) -> Unit = {},
+    showUnreadOnly: Boolean = true,
+    onToggleCategoryUnreadOnly: (SmsCategory, Boolean) -> Unit = { _, _ -> }
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
+    val currentCatCounts = categoryCounts[selectedCategory]
+    val unreadInTab = currentCatCounts?.unreadCount ?: 0
+    val totalInTab = currentCatCounts?.totalCount ?: 0
 
     val permissionsLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestMultiplePermissions()
@@ -502,6 +510,56 @@ fun MessagesScreen(
                 }
             }
 
+            if (searchQuery.isBlank()) {
+                Surface(
+                    color = MaterialTheme.colorScheme.surface,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("category_unread_filter_bar")
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onToggleCategoryUnreadOnly(selectedCategory, !showUnreadOnly) }
+                            .padding(horizontal = 16.dp, vertical = 6.dp)
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Outlined.MarkEmailUnread,
+                                contentDescription = null,
+                                tint = if (showUnreadOnly) MaterialTheme.colorScheme.primary
+                                else MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            Text(
+                                text = stringResource(R.string.show_unread_toggle_label),
+                                style = MaterialTheme.typography.labelLarge,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            Text(
+                                text = if (showUnreadOnly) "Unread only ($unreadInTab)" else "All ($totalInTab)",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.testTag("category_unread_filter_summary")
+                            )
+                        }
+                        Switch(
+                            checked = showUnreadOnly,
+                            onCheckedChange = { enabled -> onToggleCategoryUnreadOnly(selectedCategory, enabled) },
+                            modifier = Modifier.testTag("category_unread_only_switch")
+                        )
+                    }
+                }
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+            }
+
             if (
                 searchQuery.isBlank() &&
                 (selectedCategory == SmsCategory.OTP || selectedCategory == SmsCategory.PROMOTIONAL)
@@ -611,19 +669,53 @@ fun MessagesScreen(
                     }
                     Spacer(modifier = Modifier.height(16.dp))
                     Text(
-                        text = if (searchQuery.isNotBlank()) "No matching messages"
-                        else stringResource(R.string.empty_category_title, selectedCategory.title),
+                        text = when {
+                            searchQuery.isNotBlank() -> "No matching messages"
+                            showUnreadOnly -> stringResource(
+                                R.string.empty_unread_category_title,
+                                selectedCategory.title
+                            )
+                            else -> stringResource(
+                                R.string.empty_category_title,
+                                selectedCategory.title
+                            )
+                        },
                         style = MaterialTheme.typography.titleMedium,
                         textAlign = TextAlign.Center
                     )
                     Spacer(modifier = Modifier.height(6.dp))
                     Text(
-                        text = if (searchQuery.isNotBlank()) "Try searching by sender header, contact name, or OTP digits."
-                        else stringResource(R.string.empty_category_subtitle, selectedCategory.title),
+                        text = when {
+                            searchQuery.isNotBlank() -> "Try searching by sender header, contact name, or OTP digits."
+                            showUnreadOnly && totalInTab > 0 -> stringResource(
+                                R.string.empty_unread_with_read_subtitle,
+                                totalInTab,
+                                selectedCategory.title
+                            )
+                            else -> stringResource(
+                                R.string.empty_category_subtitle,
+                                selectedCategory.title
+                            )
+                        },
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         textAlign = TextAlign.Center
                     )
+
+                    if (searchQuery.isBlank() && showUnreadOnly && totalInTab > 0) {
+                        Spacer(Modifier.height(16.dp))
+                        OutlinedButton(
+                            onClick = { onToggleCategoryUnreadOnly(selectedCategory, false) },
+                            modifier = Modifier.testTag("empty_unread_show_all_button")
+                        ) {
+                            Text(
+                                stringResource(
+                                    R.string.show_all_in_category_button,
+                                    selectedCategory.title
+                                )
+                            )
+                        }
+                    }
 
                     if (showEmulatorDemoBanner && searchQuery.isBlank()) {
                         Spacer(modifier = Modifier.height(20.dp))
