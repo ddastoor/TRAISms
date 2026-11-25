@@ -2,12 +2,17 @@ package com.example
 
 import android.content.Context
 import android.content.ContextWrapper
+import android.os.Handler
+import android.os.Looper
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshots.ObserverHandle
+import androidx.compose.runtime.snapshots.Snapshot
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.AndroidUiDispatcher
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotSelected
@@ -35,6 +40,8 @@ import com.example.ui.theme.TraiSmsTheme
 import com.example.worker.OtpCleanupWorker
 import java.io.ByteArrayInputStream
 import java.io.File
+import java.util.concurrent.atomic.AtomicBoolean
+import kotlin.coroutines.ContinuationInterceptor
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -43,15 +50,21 @@ import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.TestRule
 import org.junit.runner.RunWith
+import org.junit.runners.model.Statement
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.Shadows
 import org.robolectric.annotation.Config
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34], qualifiers = "w411dp-h914dp-xxhdpi")
 class OtpAutoDeleteRobolectricTest {
 
-    @get:Rule
+    @get:Rule(order = 0)
+    val snapshotSyncRule: TestRule = createComposeSnapshotSyncRule()
+
+    @get:Rule(order = 1)
     val composeTestRule = createComposeRule()
 
     private lateinit var context: Context
@@ -60,35 +73,43 @@ class OtpAutoDeleteRobolectricTest {
     private val tempStorageDirs = mutableListOf<File>()
 
     @Before
-    fun setUp() = runBlocking {
-        context = ApplicationProvider.getApplicationContext()
-        app = context as TraiSmsApp
-        systemSmsHelper = SystemSmsHelper(context)
-        app.container.database.smsDao().deleteAllMessages()
-        app.container.settingsStore.updateSettings {
-            AppSettings(
-                promoAutoDeleteDays = 7,
-                otpAutoDeleteDays = 0,
-                onboardingDismissed = true
-            )
+    fun setUp(): Unit {
+        runBlocking {
+            context = ApplicationProvider.getApplicationContext()
+            app = context as TraiSmsApp
+            systemSmsHelper = SystemSmsHelper(context)
+            app.container.database.smsDao().deleteAllMessages()
+            app.container.settingsStore.updateSettings {
+                AppSettings(
+                    promoAutoDeleteDays = 7,
+                    otpAutoDeleteDays = 0,
+                    initialSyncCompleted = true,
+                    onboardingDismissed = true
+                )
+            }
         }
     }
 
     @After
-    fun tearDown() = runBlocking {
-        app.container.database.smsDao().deleteAllMessages()
-        app.container.settingsStore.updateSettings {
-            it.copy(
-                promoAutoDeleteDays = 7,
-                otpAutoDeleteDays = 0
-            )
+    fun tearDown(): Unit {
+        runBlocking {
+            app.container.database.smsDao().deleteAllMessages()
+            app.container.settingsStore.updateSettings {
+                it.copy(
+                    promoAutoDeleteDays = 7,
+                    otpAutoDeleteDays = 0,
+                    initialSyncCompleted = true,
+                    onboardingDismissed = true
+                )
+            }
+            tempStorageDirs.forEach { dir -> dir.deleteRecursively() }
+            tempStorageDirs.clear()
         }
-        tempStorageDirs.forEach { dir -> dir.deleteRecursively() }
-        tempStorageDirs.clear()
     }
 
     @Test
-    fun `purgeExpiredOtpMessages deletes strictly expired unarchived OTP messages while keeping recent OTP archived OTP and all 7 other categories`() = runBlocking {
+    fun `purgeExpiredOtpMessages deletes strictly expired unarchived OTP messages while keeping recent OTP archived OTP and all 7 other categories`(): Unit {
+        runBlocking {
         val smsDao = app.container.database.smsDao()
         val repository = app.container.smsRepository
 
@@ -227,10 +248,11 @@ class OtpAutoDeleteRobolectricTest {
         assertEquals("traisms_otp_auto_cleanup_work", OtpCleanupWorker.UNIQUE_WORK_NAME)
         app.container.workScheduler.syncOtpCleanupSchedule(7)
         app.container.workScheduler.syncOtpCleanupSchedule(0)
+        }
     }
 
     @Test
-    fun `MessagesScreen displays in-tab auto-delete bar only on OTP and Promotional tabs and updates presets accurately`() {
+    fun `MessagesScreen displays in-tab auto-delete bar only on OTP and Promotional tabs and updates presets accurately`(): Unit {
         var selectedCategory by mutableStateOf(SmsCategory.PERSONAL)
         var searchQuery by mutableStateOf("")
         var otpAutoDeleteDays by mutableStateOf(0)
@@ -389,7 +411,8 @@ class OtpAutoDeleteRobolectricTest {
     }
 
     @Test
-    fun `SettingsScreen OTP Auto-Delete card selects presets and persists otpAutoDeleteDays to EncryptedSettingsStore`() = runBlocking {
+    fun `SettingsScreen OTP Auto-Delete card selects presets and persists otpAutoDeleteDays to EncryptedSettingsStore`(): Unit {
+        runBlocking {
         val initialSnapshot = app.container.settingsStore.getSettingsSnapshot()
         assertEquals(0, initialSnapshot.otpAutoDeleteDays)
         assertEquals(7, initialSnapshot.promoAutoDeleteDays)
@@ -480,10 +503,12 @@ class OtpAutoDeleteRobolectricTest {
         composeTestRule.onNodeWithTag("promo_preset_7")
             .performScrollTo()
             .assertIsSelected()
+        }
     }
 
     @Test
-    fun `EncryptedSettingsStore persists otpAutoDeleteDays across cold reload and defaults legacy snapshots to Off`() = runBlocking {
+    fun `EncryptedSettingsStore persists otpAutoDeleteDays across cold reload and defaults legacy snapshots to Off`(): Unit {
+        runBlocking {
         assertEquals(0, AppSettings().otpAutoDeleteDays)
         assertEquals(7, AppSettings().promoAutoDeleteDays)
 
@@ -536,6 +561,46 @@ class OtpAutoDeleteRobolectricTest {
         assertEquals(0, migratedSettings.otpAutoDeleteDays)
         assertEquals(30, migratedSettings.promoAutoDeleteDays)
         assertTrue(migratedSettings.onboardingDismissed)
+        }
+    }
+
+    private fun createComposeSnapshotSyncRule(): TestRule = TestRule { base, _ ->
+        object : Statement() {
+            override fun evaluate() {
+                flushMainLooperAndSnapshots()
+
+                val pendingApply = AtomicBoolean(false)
+                val observerHandle: ObserverHandle = Snapshot.registerGlobalWriteObserver {
+                    if (pendingApply.compareAndSet(false, true)) {
+                        Handler(Looper.getMainLooper()).post {
+                            pendingApply.set(false)
+                            Snapshot.sendApplyNotifications()
+                        }
+                    }
+                }
+                try {
+                    base.evaluate()
+                } finally {
+                    observerHandle.dispose()
+                    runCatching { flushMainLooperAndSnapshots() }
+                }
+            }
+        }
+    }
+
+    private fun flushMainLooperAndSnapshots() {
+        runCatching {
+            val dispatcher = AndroidUiDispatcher.Main[ContinuationInterceptor]
+            if (dispatcher != null) {
+                val callbackField = dispatcher.javaClass.getDeclaredField("dispatchCallback").apply {
+                    isAccessible = true
+                }
+                (callbackField.get(dispatcher) as? Runnable)?.run()
+            }
+        }
+        Shadows.shadowOf(Looper.getMainLooper()).idle()
+        Snapshot.sendApplyNotifications()
+        Shadows.shadowOf(Looper.getMainLooper()).idle()
     }
 
     private fun createIsolatedDir(prefix: String): File {

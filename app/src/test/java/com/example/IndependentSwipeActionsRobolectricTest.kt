@@ -2,13 +2,17 @@ package com.example
 
 import android.content.Context
 import android.content.ContextWrapper
+import android.os.Handler
 import android.os.Looper
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshots.ObserverHandle
+import androidx.compose.runtime.snapshots.Snapshot
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.AndroidUiDispatcher
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotSelected
@@ -23,6 +27,8 @@ import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipeLeft
 import androidx.compose.ui.test.swipeRight
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.ViewModelStore
 import androidx.test.core.app.ApplicationProvider
 import com.example.data.crypto.AppSettings
 import com.example.data.crypto.EncryptedSettingsStore
@@ -41,6 +47,8 @@ import com.example.ui.settings.SettingsScreen
 import com.example.ui.theme.TraiSmsTheme
 import java.io.ByteArrayInputStream
 import java.io.File
+import java.util.concurrent.atomic.AtomicBoolean
+import kotlin.coroutines.ContinuationInterceptor
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -52,7 +60,9 @@ import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.TestRule
 import org.junit.runner.RunWith
+import org.junit.runners.model.Statement
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows
 import org.robolectric.annotation.Config
@@ -61,7 +71,10 @@ import org.robolectric.annotation.Config
 @Config(sdk = [34], qualifiers = "w411dp-h914dp-xxhdpi")
 class IndependentSwipeActionsRobolectricTest {
 
-    @get:Rule
+    @get:Rule(order = 0)
+    val snapshotSyncRule: TestRule = createComposeSnapshotSyncRule()
+
+    @get:Rule(order = 1)
     val composeTestRule = createComposeRule()
 
     private lateinit var context: Context
@@ -77,28 +90,39 @@ class IndependentSwipeActionsRobolectricTest {
     )
 
     @Before
-    fun setUp() = runBlocking {
-        context = ApplicationProvider.getApplicationContext()
-        app = context as TraiSmsApp
-        systemSmsHelper = SystemSmsHelper(context)
-        app.container.database.smsDao().deleteAllMessages()
-        app.container.settingsStore.updateSettings {
-            AppSettings(onboardingDismissed = true)
+    fun setUp(): Unit {
+        runBlocking {
+            context = ApplicationProvider.getApplicationContext()
+            app = context as TraiSmsApp
+            systemSmsHelper = SystemSmsHelper(context)
+            app.container.database.smsDao().deleteAllMessages()
+            app.container.settingsStore.updateSettings {
+                AppSettings(
+                    initialSyncCompleted = true,
+                    onboardingDismissed = true
+                )
+            }
         }
     }
 
     @After
-    fun tearDown() = runBlocking {
-        app.container.database.smsDao().deleteAllMessages()
-        app.container.settingsStore.updateSettings {
-            AppSettings(onboardingDismissed = true)
+    fun tearDown(): Unit {
+        runBlocking {
+            app.container.database.smsDao().deleteAllMessages()
+            app.container.settingsStore.updateSettings {
+                AppSettings(
+                    initialSyncCompleted = true,
+                    onboardingDismissed = true
+                )
+            }
+            tempStorageDirs.forEach { dir -> dir.deleteRecursively() }
+            tempStorageDirs.clear()
         }
-        tempStorageDirs.forEach { dir -> dir.deleteRecursively() }
-        tempStorageDirs.clear()
     }
 
     @Test
-    fun `AppSettings defaults all 9 left-right combinations cold reload MainViewModel updates and legacy Tink payloads work cleanly`() = runBlocking {
+    fun `AppSettings defaults all 9 left-right combinations cold reload MainViewModel updates and legacy Tink payloads work cleanly`(): Unit {
+        runBlocking {
         // 1. Enum entries, labels, SwipeAction typealias, and out-of-the-box AppSettings() defaults
         assertEquals(
             listOf(LeftSwipeAction.ARCHIVE, LeftSwipeAction.DELETE, LeftSwipeAction.ASSIGN_CATEGORY),
@@ -204,7 +228,11 @@ class IndependentSwipeActionsRobolectricTest {
         assertEquals(LeftSwipeAction.ASSIGN_CATEGORY, legacyDiskSnapshot.rightSwipeAction)
 
         // 4. MainViewModel updateLeftSwipeAction and updateRightSwipeAction mutate independently
-        val viewModel = MainViewModel(app.container)
+        val vmStore = ViewModelStore()
+        val viewModel = ViewModelProvider(
+            vmStore,
+            MainViewModel.provideFactory(app.container)
+        )[MainViewModel::class.java]
         val settingsCollector = launch(Dispatchers.Unconfined) {
             viewModel.settings.collect {}
         }
@@ -234,11 +262,15 @@ class IndependentSwipeActionsRobolectricTest {
             }
         } finally {
             settingsCollector.cancel()
+            vmStore.clear()
+            Shadows.shadowOf(Looper.getMainLooper()).idle()
+        }
         }
     }
 
     @Test
-    fun `SettingsScreen renders all 6 swipe chips reflects defaults and updates Left and Right independently`() = runBlocking {
+    fun `SettingsScreen renders all 6 swipe chips reflects defaults and updates Left and Right independently`(): Unit {
+        runBlocking {
         val initialSnapshot = app.container.settingsStore.getSettingsSnapshot()
         assertEquals(LeftSwipeAction.ARCHIVE, initialSnapshot.leftSwipeAction)
         assertEquals(LeftSwipeAction.ASSIGN_CATEGORY, initialSnapshot.rightSwipeAction)
@@ -395,10 +427,11 @@ class IndependentSwipeActionsRobolectricTest {
             LeftSwipeAction.DELETE,
             app.container.settingsStore.getSettingsSnapshot().rightSwipeAction
         )
+        }
     }
 
     @Test
-    fun `MessagesScreen executes swipeLeft and swipeRight actions and updates live when reconfigured dynamically`() {
+    fun `MessagesScreen executes swipeLeft and swipeRight actions and updates live when reconfigured dynamically`(): Unit {
         val threadKey = "VM-HDFCBK-T"
         val inboxThread = buildThreadSummary(
             id = 801L,
@@ -589,10 +622,12 @@ class IndependentSwipeActionsRobolectricTest {
             composeTestRule.onAllNodesWithTag("move_category_bottom_sheet")
                 .fetchSemanticsNodes().isEmpty()
         }
+        composeTestRule.mainClock.advanceTimeBy(15_000)
+        composeTestRule.waitForIdle()
     }
 
     @Test
-    fun `ArchiveScreen executes swipeLeft and swipeRight for Delete Unarchive and Assign Category with live reconfiguration`() {
+    fun `ArchiveScreen executes swipeLeft and swipeRight for Delete Unarchive and Assign Category with live reconfiguration`(): Unit {
         val threadKey = "AX-AIRTEL-S"
         val archivedThread = buildThreadSummary(
             id = 901L,
@@ -710,6 +745,47 @@ class IndependentSwipeActionsRobolectricTest {
 
         assertEquals(listOf(listOf(threadKey)), recordedDeleteThreadsCalls)
         assertTrue(recordedSetArchivedCalls.isEmpty())
+        composeTestRule.mainClock.advanceTimeBy(15_000)
+        composeTestRule.waitForIdle()
+    }
+
+    private fun createComposeSnapshotSyncRule(): TestRule = TestRule { base, _ ->
+        object : Statement() {
+            override fun evaluate() {
+                flushMainLooperAndSnapshots()
+
+                val pendingApply = AtomicBoolean(false)
+                val observerHandle: ObserverHandle = Snapshot.registerGlobalWriteObserver {
+                    if (pendingApply.compareAndSet(false, true)) {
+                        Handler(Looper.getMainLooper()).post {
+                            pendingApply.set(false)
+                            Snapshot.sendApplyNotifications()
+                        }
+                    }
+                }
+                try {
+                    base.evaluate()
+                } finally {
+                    observerHandle.dispose()
+                    runCatching { flushMainLooperAndSnapshots() }
+                }
+            }
+        }
+    }
+
+    private fun flushMainLooperAndSnapshots() {
+        runCatching {
+            val dispatcher = AndroidUiDispatcher.Main[ContinuationInterceptor]
+            if (dispatcher != null) {
+                val callbackField = dispatcher.javaClass.getDeclaredField("dispatchCallback").apply {
+                    isAccessible = true
+                }
+                (callbackField.get(dispatcher) as? Runnable)?.run()
+            }
+        }
+        Shadows.shadowOf(Looper.getMainLooper()).idle()
+        Snapshot.sendApplyNotifications()
+        Shadows.shadowOf(Looper.getMainLooper()).idle()
     }
 
     private fun assertSwipeChipsSelection(

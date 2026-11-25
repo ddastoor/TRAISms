@@ -10,13 +10,18 @@ import android.content.pm.ProviderInfo
 import android.database.Cursor
 import android.database.MatrixCursor
 import android.net.Uri
+import android.os.Handler
+import android.os.Looper
 import android.provider.ContactsContract
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshots.ObserverHandle
+import androidx.compose.runtime.snapshots.Snapshot
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.AndroidUiDispatcher
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsNode
 import androidx.compose.ui.semantics.SemanticsProperties
@@ -43,13 +48,18 @@ import com.example.data.sms.ContactLookupCache
 import com.example.ui.theme.TraiSmsTheme
 import com.example.ui.thread.ComposeSmsScreen
 import com.example.ui.thread.ThreadDetailScreen
+import java.util.concurrent.atomic.AtomicBoolean
+import kotlin.coroutines.ContinuationInterceptor
+import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.TestRule
 import org.junit.runner.RunWith
+import org.junit.runners.model.Statement
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows
 import org.robolectric.annotation.Config
@@ -59,7 +69,10 @@ import org.robolectric.shadows.ShadowContentResolver
 @Config(sdk = [34], qualifiers = "w411dp-h914dp-xxhdpi")
 class ThreadDetailMessageActionsRobolectricTest {
 
-    @get:Rule
+    @get:Rule(order = 0)
+    val snapshotSyncRule: TestRule = createComposeSnapshotSyncRule()
+
+    @get:Rule(order = 1)
     val composeTestRule = createComposeRule()
 
     private lateinit var context: Context
@@ -67,7 +80,7 @@ class ThreadDetailMessageActionsRobolectricTest {
     private lateinit var contactCache: ContactLookupCache
 
     @Before
-    fun setUp() {
+    fun setUp(): Unit {
         context = ApplicationProvider.getApplicationContext()
         clipboardManager = context.getSystemService(ClipboardManager::class.java)
         clipboardManager.clearPrimaryClip()
@@ -108,8 +121,13 @@ class ThreadDetailMessageActionsRobolectricTest {
         contactCache = ContactLookupCache(context)
     }
 
+    @After
+    fun tearDown(): Unit {
+        clipboardManager.clearPrimaryClip()
+    }
+
     @Test
-    fun `long pressing SMS bubble displays strictly Copy and Forward options and Copy copies full body and dismisses prompt`() {
+    fun `long pressing SMS bubble displays strictly Copy and Forward options and Copy copies full body and dismisses prompt`(): Unit {
         val threadKey = "+919876543210"
         val fullBody = "Flight AI-402 boarding starts at Gate 14B at 18:45 hrs. Booking PNR: K9M2Q."
         val messages = listOf(
@@ -200,10 +218,12 @@ class ThreadDetailMessageActionsRobolectricTest {
                 .fetchSemanticsNodes().isNotEmpty()
         }
         composeTestRule.onNodeWithText("Message copied to clipboard").assertIsDisplayed()
+        composeTestRule.mainClock.advanceTimeBy(5_000)
+        composeTestRule.waitForIdle()
     }
 
     @Test
-    fun `long pressing SMS bubble and tapping Forward dismisses prompt invokes callback and pre-populates ComposeSmsScreen`() {
+    fun `long pressing SMS bubble and tapping Forward dismisses prompt invokes callback and pre-populates ComposeSmsScreen`(): Unit {
         val threadKey = "VM-HDFCBK-T"
         val forwardedTargetBody = "Acct XX9012 credited with INR 25,000.00 on 24-Nov via NEFT Ref HDFC0091827."
         val messages = listOf(
@@ -313,7 +333,7 @@ class ThreadDetailMessageActionsRobolectricTest {
     }
 
     @Test
-    fun `OTP bubble single-tap copies extracted OTP code while long-press opens prompt to copy or forward full SMS`() {
+    fun `OTP bubble single-tap copies extracted OTP code while long-press opens prompt to copy or forward full SMS`(): Unit {
         val threadKey = "VM-HDFCBK-T"
         val otpCode = "739104"
         val fullOtpBody = buildString {
@@ -401,6 +421,47 @@ class ThreadDetailMessageActionsRobolectricTest {
                 .fetchSemanticsNodes().isEmpty()
         }
         assertEquals(listOf(fullOtpBody), forwardedBodies)
+        composeTestRule.mainClock.advanceTimeBy(5_000)
+        composeTestRule.waitForIdle()
+    }
+
+    private fun createComposeSnapshotSyncRule(): TestRule = TestRule { base, _ ->
+        object : Statement() {
+            override fun evaluate() {
+                flushMainLooperAndSnapshots()
+
+                val pendingApply = AtomicBoolean(false)
+                val observerHandle: ObserverHandle = Snapshot.registerGlobalWriteObserver {
+                    if (pendingApply.compareAndSet(false, true)) {
+                        Handler(Looper.getMainLooper()).post {
+                            pendingApply.set(false)
+                            Snapshot.sendApplyNotifications()
+                        }
+                    }
+                }
+                try {
+                    base.evaluate()
+                } finally {
+                    observerHandle.dispose()
+                    runCatching { flushMainLooperAndSnapshots() }
+                }
+            }
+        }
+    }
+
+    private fun flushMainLooperAndSnapshots() {
+        runCatching {
+            val dispatcher = AndroidUiDispatcher.Main[ContinuationInterceptor]
+            if (dispatcher != null) {
+                val callbackField = dispatcher.javaClass.getDeclaredField("dispatchCallback").apply {
+                    isAccessible = true
+                }
+                (callbackField.get(dispatcher) as? Runnable)?.run()
+            }
+        }
+        Shadows.shadowOf(Looper.getMainLooper()).idle()
+        Snapshot.sendApplyNotifications()
+        Shadows.shadowOf(Looper.getMainLooper()).idle()
     }
 
     private fun collectClickableTextNodes(node: SemanticsNode): List<SemanticsNode> {

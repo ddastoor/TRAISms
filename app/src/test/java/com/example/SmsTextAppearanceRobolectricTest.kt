@@ -2,13 +2,18 @@ package com.example
 
 import android.content.Context
 import android.content.ContextWrapper
+import android.os.Handler
+import android.os.Looper
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshots.ObserverHandle
+import androidx.compose.runtime.snapshots.Snapshot
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.AndroidUiDispatcher
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotSelected
@@ -44,6 +49,8 @@ import com.example.ui.theme.TraiSmsTheme
 import com.example.ui.thread.ThreadDetailScreen
 import java.io.ByteArrayInputStream
 import java.io.File
+import java.util.concurrent.atomic.AtomicBoolean
+import kotlin.coroutines.ContinuationInterceptor
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -52,15 +59,21 @@ import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.TestRule
 import org.junit.runner.RunWith
+import org.junit.runners.model.Statement
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.Shadows
 import org.robolectric.annotation.Config
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34], qualifiers = "w411dp-h914dp-xxhdpi")
 class SmsTextAppearanceRobolectricTest {
 
-    @get:Rule
+    @get:Rule(order = 0)
+    val snapshotSyncRule: TestRule = createComposeSnapshotSyncRule()
+
+    @get:Rule(order = 1)
     val composeTestRule = createComposeRule()
 
     private lateinit var context: Context
@@ -69,33 +82,41 @@ class SmsTextAppearanceRobolectricTest {
     private val tempStorageDirs = mutableListOf<File>()
 
     @Before
-    fun setUp() = runBlocking {
-        context = ApplicationProvider.getApplicationContext()
-        app = context as TraiSmsApp
-        systemSmsHelper = SystemSmsHelper(context)
-        app.container.settingsStore.updateSettings {
-            AppSettings(
-                onboardingDismissed = true,
-                smsFontSize = SmsFontSize.DEFAULT,
-                smsFontBold = false
-            )
+    fun setUp(): Unit {
+        runBlocking {
+            context = ApplicationProvider.getApplicationContext()
+            app = context as TraiSmsApp
+            systemSmsHelper = SystemSmsHelper(context)
+            app.container.settingsStore.updateSettings {
+                AppSettings(
+                    initialSyncCompleted = true,
+                    onboardingDismissed = true,
+                    smsFontSize = SmsFontSize.DEFAULT,
+                    smsFontBold = false
+                )
+            }
         }
     }
 
     @After
-    fun tearDown() = runBlocking {
-        app.container.settingsStore.updateSettings {
-            it.copy(
-                smsFontSize = SmsFontSize.DEFAULT,
-                smsFontBold = false
-            )
+    fun tearDown(): Unit {
+        runBlocking {
+            app.container.settingsStore.updateSettings {
+                it.copy(
+                    initialSyncCompleted = true,
+                    onboardingDismissed = true,
+                    smsFontSize = SmsFontSize.DEFAULT,
+                    smsFontBold = false
+                )
+            }
+            tempStorageDirs.forEach { dir -> dir.deleteRecursively() }
+            tempStorageDirs.clear()
         }
-        tempStorageDirs.forEach { dir -> dir.deleteRecursively() }
-        tempStorageDirs.clear()
     }
 
     @Test
-    fun `SettingsScreen renders font size chips bold switch and live preview and updates TextLayoutResult style and store`() = runBlocking {
+    fun `SettingsScreen renders font size chips bold switch and live preview and updates TextLayoutResult style and store`(): Unit {
+        runBlocking {
         val initialSnapshot = app.container.settingsStore.getSettingsSnapshot()
         assertEquals(SmsFontSize.DEFAULT, initialSnapshot.smsFontSize)
         assertFalse(initialSnapshot.smsFontBold)
@@ -258,10 +279,12 @@ class SmsTextAppearanceRobolectricTest {
         val resetSnapshot = app.container.settingsStore.getSettingsSnapshot()
         assertEquals(SmsFontSize.DEFAULT, resetSnapshot.smsFontSize)
         assertFalse(resetSnapshot.smsFontBold)
+        }
     }
 
     @Test
-    fun `EncryptedSettingsStore persists and restores smsFontSize and smsFontBold across cold reload and defaults legacy snapshots`() = runBlocking {
+    fun `EncryptedSettingsStore persists and restores smsFontSize and smsFontBold across cold reload and defaults legacy snapshots`(): Unit {
+        runBlocking {
         val writerDir = createIsolatedDir("settings_writer")
         val writerStore = EncryptedSettingsStore(
             context = buildIsolatedStoreContext(context, writerDir),
@@ -309,10 +332,11 @@ class SmsTextAppearanceRobolectricTest {
         assertTrue(migratedSettings.onboardingDismissed)
         assertEquals(SmsFontSize.DEFAULT, migratedSettings.smsFontSize)
         assertFalse(migratedSettings.smsFontBold)
+        }
     }
 
     @Test
-    fun `ThreadDetailScreen scales open SMS bubble text across Default Large and Larger and applies Bold weight`() {
+    fun `ThreadDetailScreen scales open SMS bubble text across Default Large and Larger and applies Bold weight`(): Unit {
         val threadKey = "+919876543210"
         val messages = listOf(
             buildTestMessage(
@@ -422,7 +446,7 @@ class SmsTextAppearanceRobolectricTest {
     }
 
     @Test
-    fun `ThreadRowItem scales inbox and archive SMS snippet previews across Default Large and Larger and applies Bold weight`() {
+    fun `ThreadRowItem scales inbox and archive SMS snippet previews across Default Large and Larger and applies Bold weight`(): Unit {
         val inboxReadThread = ThreadSummary(
             latestMessageId = 701L,
             threadKey = "VM-HDFCBK-T",
@@ -542,6 +566,45 @@ class SmsTextAppearanceRobolectricTest {
         assertEquals(FontWeight.Bold, defaultBoldReadSnippet.fontWeight)
         assertEquals(14.sp, defaultBoldArchiveSnippet.fontSize)
         assertEquals(FontWeight.Bold, defaultBoldArchiveSnippet.fontWeight)
+    }
+
+    private fun createComposeSnapshotSyncRule(): TestRule = TestRule { base, _ ->
+        object : Statement() {
+            override fun evaluate() {
+                flushMainLooperAndSnapshots()
+
+                val pendingApply = AtomicBoolean(false)
+                val observerHandle: ObserverHandle = Snapshot.registerGlobalWriteObserver {
+                    if (pendingApply.compareAndSet(false, true)) {
+                        Handler(Looper.getMainLooper()).post {
+                            pendingApply.set(false)
+                            Snapshot.sendApplyNotifications()
+                        }
+                    }
+                }
+                try {
+                    base.evaluate()
+                } finally {
+                    observerHandle.dispose()
+                    runCatching { flushMainLooperAndSnapshots() }
+                }
+            }
+        }
+    }
+
+    private fun flushMainLooperAndSnapshots() {
+        runCatching {
+            val dispatcher = AndroidUiDispatcher.Main[ContinuationInterceptor]
+            if (dispatcher != null) {
+                val callbackField = dispatcher.javaClass.getDeclaredField("dispatchCallback").apply {
+                    isAccessible = true
+                }
+                (callbackField.get(dispatcher) as? Runnable)?.run()
+            }
+        }
+        Shadows.shadowOf(Looper.getMainLooper()).idle()
+        Snapshot.sendApplyNotifications()
+        Shadows.shadowOf(Looper.getMainLooper()).idle()
     }
 
     private fun fetchRenderedTextStyle(

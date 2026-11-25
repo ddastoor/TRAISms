@@ -9,9 +9,14 @@ import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.hardware.biometrics.BiometricManager
+import android.os.Handler
 import android.os.Looper
+import android.view.View
 import android.widget.FrameLayout
 import android.widget.TextView
+import androidx.compose.runtime.snapshots.ObserverHandle
+import androidx.compose.runtime.snapshots.Snapshot
+import androidx.compose.ui.platform.AndroidUiDispatcher
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
@@ -26,6 +31,8 @@ import com.example.data.db.SmsCategory
 import com.example.data.db.SmsMessageEntity
 import com.example.data.sms.SmsNotificationActionReceiver
 import com.example.data.sms.SmsNotificationHelper
+import java.util.concurrent.atomic.AtomicBoolean
+import kotlin.coroutines.ContinuationInterceptor
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.After
@@ -37,7 +44,9 @@ import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.TestRule
 import org.junit.runner.RunWith
+import org.junit.runners.model.Statement
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows
 import org.robolectric.annotation.Config
@@ -48,7 +57,10 @@ import org.robolectric.shadows.ShadowBiometricManager
 @Config(sdk = [34], qualifiers = "w411dp-h914dp-xxhdpi")
 class SmsNotificationActionsRobolectricTest {
 
-    @get:Rule
+    @get:Rule(order = 0)
+    val snapshotSyncRule: TestRule = createComposeSnapshotSyncRule()
+
+    @get:Rule(order = 1)
     val composeTestRule = createEmptyComposeRule()
 
     private lateinit var context: Context
@@ -57,36 +69,46 @@ class SmsNotificationActionsRobolectricTest {
     private lateinit var notificationHelper: SmsNotificationHelper
 
     @Before
-    fun setUp() = runBlocking {
-        context = ApplicationProvider.getApplicationContext()
-        app = context as TraiSmsApp
-        Shadows.shadowOf(app as Application).grantPermissions(Manifest.permission.POST_NOTIFICATIONS)
-        notificationManager = context.getSystemService(NotificationManager::class.java)
-        notificationManager.cancelAll()
-        notificationHelper = SmsNotificationHelper(context)
+    fun setUp(): Unit {
+        runBlocking {
+            context = ApplicationProvider.getApplicationContext()
+            app = context as TraiSmsApp
+            Shadows.shadowOf(app as Application).grantPermissions(Manifest.permission.POST_NOTIFICATIONS)
+            notificationManager = context.getSystemService(NotificationManager::class.java)
+            notificationManager.cancelAll()
+            notificationHelper = SmsNotificationHelper(context)
 
-        app.container.database.smsDao().deleteAllMessages()
-        app.container.settingsStore.updateSettings {
-            AppSettings(
-                appLockEnabled = false,
-                onboardingDismissed = true
-            )
+            app.container.database.smsDao().deleteAllMessages()
+            app.container.settingsStore.updateSettings {
+                AppSettings(
+                    appLockEnabled = false,
+                    initialSyncCompleted = true,
+                    onboardingDismissed = true
+                )
+            }
         }
     }
 
     @After
-    fun tearDown() = runBlocking {
-        notificationManager.cancelAll()
-        val keyguard = context.getSystemService(KeyguardManager::class.java)
-        Shadows.shadowOf(keyguard).setIsDeviceSecure(false)
-        ShadowBiometricManager.reset()
-        app.container.settingsStore.updateSettings {
-            it.copy(appLockEnabled = false)
+    fun tearDown(): Unit {
+        runBlocking {
+            notificationManager.cancelAll()
+            val keyguard = context.getSystemService(KeyguardManager::class.java)
+            Shadows.shadowOf(keyguard).setIsDeviceSecure(false)
+            ShadowBiometricManager.reset()
+            app.container.database.smsDao().deleteAllMessages()
+            app.container.settingsStore.updateSettings {
+                it.copy(
+                    appLockEnabled = false,
+                    initialSyncCompleted = true,
+                    onboardingDismissed = true
+                )
+            }
         }
     }
 
     @Test
-    fun `non-OTP and App-Locked notifications expose 3 standard actions without Copy OTP`() {
+    fun `non-OTP and App-Locked notifications expose 3 standard actions without Copy OTP`(): Unit {
         val threadKey = "AD-ICICIB-T"
         notificationHelper.postIncomingSmsNotification(
             messageId = 101L,
@@ -137,7 +159,7 @@ class SmsNotificationActionsRobolectricTest {
     }
 
     @Test
-    fun `unlocked OTP notification exposes all 4 clickable RemoteViews buttons with zero duplicate standard actions`() {
+    fun `unlocked OTP notification exposes all 4 clickable RemoteViews buttons with zero duplicate standard actions`(): Unit {
         val threadKey = "VM-HDFCBK-T"
         notificationHelper.postIncomingSmsNotification(
             messageId = 201L,
@@ -203,7 +225,7 @@ class SmsNotificationActionsRobolectricTest {
     }
 
     @Test
-    fun `ACTION_COPY_OTP copies exact OTP with EXTRA_IS_SENSITIVE and cancels notification`() {
+    fun `ACTION_COPY_OTP copies exact OTP with EXTRA_IS_SENSITIVE and cancels notification`(): Unit {
         // Use a threadKey with a negative hashCode() to verify hasExtra(EXTRA_NOTIFICATION_ID) handling
         val threadKey = "polygenelubricants"
         assertTrue(SmsNotificationHelper.notificationIdForThread(threadKey) < 0)
@@ -245,7 +267,8 @@ class SmsNotificationActionsRobolectricTest {
     }
 
     @Test
-    fun `ACTION_ARCHIVE marks conversation archived in Room DB and cancels notification`() = runBlocking {
+    fun `ACTION_ARCHIVE marks conversation archived in Room DB and cancels notification`(): Unit {
+        runBlocking {
         val threadKey = "AX-AIRTEL-S"
         val insertedId = insertTestMessage(
             threadKey = threadKey,
@@ -277,10 +300,12 @@ class SmsNotificationActionsRobolectricTest {
             app.container.database.smsDao().isThreadCurrentlyArchived(threadKey)
         }
         assertTrue(app.container.database.smsDao().isThreadCurrentlyArchived(threadKey))
+        }
     }
 
     @Test
-    fun `ACTION_DELETE removes target message from Room DB and cancels notification`() = runBlocking {
+    fun `ACTION_DELETE removes target message from Room DB and cancels notification`(): Unit {
+        runBlocking {
         val threadKey = "JD-MYNTRA-P"
         val olderId = insertTestMessage(
             threadKey = threadKey,
@@ -320,10 +345,12 @@ class SmsNotificationActionsRobolectricTest {
         }
         val remaining = app.container.database.smsDao().observeThreadMessages(threadKey).first()
         assertEquals(listOf(olderId), remaining.map { it.id })
+        }
     }
 
     @Test
-    fun `MainActivity ACTION_ASSIGN_CATEGORY cancels notification and opens MoveSenderCategoryBottomSheet and applies category`() = runBlocking {
+    fun `MainActivity ACTION_ASSIGN_CATEGORY cancels notification and opens MoveSenderCategoryBottomSheet and applies category`(): Unit {
+        runBlocking {
         val threadKey = "+919899001122"
         val msgId = insertTestMessage(
             threadKey = threadKey,
@@ -349,40 +376,58 @@ class SmsNotificationActionsRobolectricTest {
         val assignAction = notif.actions.first { it.title.toString() == "Assign Category" }
         val launchIntent = Shadows.shadowOf(assignAction.actionIntent).savedIntent
 
-        ActivityScenario.launch<MainActivity>(launchIntent).use {
-            assertNull(Shadows.shadowOf(notificationManager).getNotification(notifId))
+        ActivityScenario.launch<MainActivity>(launchIntent).use { scenario ->
+            try {
+                assertNull(Shadows.shadowOf(notificationManager).getNotification(notifId))
 
-            composeTestRule.waitUntil(timeoutMillis = 5_000) {
-                composeTestRule.onAllNodesWithTag("move_category_bottom_sheet")
-                    .fetchSemanticsNodes().isNotEmpty()
-            }
-            composeTestRule.onNodeWithTag("move_category_sender_title").assertIsDisplayed()
+                composeTestRule.waitUntil(timeoutMillis = 5_000) {
+                    composeTestRule.onAllNodesWithTag("move_category_bottom_sheet")
+                        .fetchSemanticsNodes().isNotEmpty()
+                }
+                composeTestRule.onNodeWithTag("move_category_sender_title").assertIsDisplayed()
 
-            composeTestRule.onNodeWithTag("sheet_option_service")
-                .performScrollTo()
-                .performClick()
-            composeTestRule.onNodeWithTag("confirm_move_category_button")
-                .performScrollTo()
-                .performClick()
+                composeTestRule.onNodeWithTag("sheet_option_service")
+                    .performScrollTo()
+                    .performClick()
+                composeTestRule.onNodeWithTag("confirm_move_category_button")
+                    .performScrollTo()
+                    .performClick()
 
-            waitForCondition {
-                app.container.database.smsDao()
+                composeTestRule.waitUntil(timeoutMillis = 5_000) {
+                    composeTestRule.onAllNodesWithTag("move_category_bottom_sheet")
+                        .fetchSemanticsNodes().isEmpty()
+                }
+
+                waitForCondition {
+                    app.container.database.smsDao()
+                        .observeThreadMessages(threadKey)
+                        .first()
+                        .firstOrNull()?.category == SmsCategory.SERVICE
+                }
+                val updated = app.container.database.smsDao()
                     .observeThreadMessages(threadKey)
                     .first()
-                    .firstOrNull()?.category == SmsCategory.SERVICE
+                    .single()
+                assertEquals(SmsCategory.SERVICE, updated.category)
+            } finally {
+                scenario.onActivity { activity ->
+                    activity.setContentView(View(activity))
+                }
+                flushMainLooperAndSnapshots()
             }
-            val updated = app.container.database.smsDao()
-                .observeThreadMessages(threadKey)
-                .first()
-                .single()
-            assertEquals(SmsCategory.SERVICE, updated.category)
+        }
         }
     }
 
     @Test
-    fun `MainActivity ACTION_ASSIGN_CATEGORY respects AppLockGateScreen when locked`() = runBlocking {
+    fun `MainActivity ACTION_ASSIGN_CATEGORY respects AppLockGateScreen when locked`(): Unit {
+        runBlocking {
         app.container.settingsStore.updateSettings {
-            it.copy(appLockEnabled = true, onboardingDismissed = true)
+            it.copy(
+                appLockEnabled = true,
+                initialSyncCompleted = true,
+                onboardingDismissed = true
+            )
         }
         val keyguard = context.getSystemService(KeyguardManager::class.java)
         Shadows.shadowOf(keyguard).setIsDeviceSecure(true)
@@ -402,17 +447,64 @@ class SmsNotificationActionsRobolectricTest {
             putExtra(SmsNotificationHelper.EXTRA_CURRENT_CATEGORY, SmsCategory.TRANSACTIONAL.name)
         }
 
-        ActivityScenario.launch<MainActivity>(launchIntent).use {
-            composeTestRule.waitUntil(timeoutMillis = 5_000) {
-                composeTestRule.onAllNodesWithTag("app_lock_gate_screen")
-                    .fetchSemanticsNodes().isNotEmpty()
+        ActivityScenario.launch<MainActivity>(launchIntent).use { scenario ->
+            try {
+                composeTestRule.waitUntil(timeoutMillis = 5_000) {
+                    composeTestRule.onAllNodesWithTag("app_lock_gate_screen")
+                        .fetchSemanticsNodes().isNotEmpty()
+                }
+                composeTestRule.onNodeWithTag("app_lock_gate_screen").assertIsDisplayed()
+                assertTrue(
+                    composeTestRule.onAllNodesWithTag("move_category_bottom_sheet")
+                        .fetchSemanticsNodes().isEmpty()
+                )
+            } finally {
+                scenario.onActivity { activity ->
+                    activity.setContentView(View(activity))
+                }
+                flushMainLooperAndSnapshots()
             }
-            composeTestRule.onNodeWithTag("app_lock_gate_screen").assertIsDisplayed()
-            assertTrue(
-                composeTestRule.onAllNodesWithTag("move_category_bottom_sheet")
-                    .fetchSemanticsNodes().isEmpty()
-            )
         }
+        }
+    }
+
+    private fun createComposeSnapshotSyncRule(): TestRule = TestRule { base, _ ->
+        object : Statement() {
+            override fun evaluate() {
+                flushMainLooperAndSnapshots()
+
+                val pendingApply = AtomicBoolean(false)
+                val observerHandle: ObserverHandle = Snapshot.registerGlobalWriteObserver {
+                    if (pendingApply.compareAndSet(false, true)) {
+                        Handler(Looper.getMainLooper()).post {
+                            pendingApply.set(false)
+                            Snapshot.sendApplyNotifications()
+                        }
+                    }
+                }
+                try {
+                    base.evaluate()
+                } finally {
+                    observerHandle.dispose()
+                    runCatching { flushMainLooperAndSnapshots() }
+                }
+            }
+        }
+    }
+
+    private fun flushMainLooperAndSnapshots() {
+        runCatching {
+            val dispatcher = AndroidUiDispatcher.Main[ContinuationInterceptor]
+            if (dispatcher != null) {
+                val callbackField = dispatcher.javaClass.getDeclaredField("dispatchCallback").apply {
+                    isAccessible = true
+                }
+                (callbackField.get(dispatcher) as? Runnable)?.run()
+            }
+        }
+        Shadows.shadowOf(Looper.getMainLooper()).idle()
+        Snapshot.sendApplyNotifications()
+        Shadows.shadowOf(Looper.getMainLooper()).idle()
     }
 
     private suspend fun insertTestMessage(
