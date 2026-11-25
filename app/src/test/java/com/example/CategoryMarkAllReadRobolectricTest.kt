@@ -25,6 +25,7 @@ import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.assertIsOff
 import androidx.compose.ui.test.assertIsOn
 import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -86,7 +87,7 @@ class CategoryMarkAllReadRobolectricTest {
     private lateinit var smsProvider: FakeSmsContentProvider
 
     @Before
-    fun setUp() = runBlocking {
+    fun setUp(): Unit = runBlocking {
         context = ApplicationProvider.getApplicationContext()
         app = context as TraiSmsApp
         systemSmsHelper = SystemSmsHelper(context)
@@ -115,7 +116,7 @@ class CategoryMarkAllReadRobolectricTest {
     }
 
     @After
-    fun tearDown() = runBlocking {
+    fun tearDown(): Unit = runBlocking {
         notificationManager.cancelAll()
         smsProvider.clear()
         ShadowRoleManager.reset()
@@ -126,7 +127,7 @@ class CategoryMarkAllReadRobolectricTest {
     }
 
     @Test
-    fun `markAllActiveInCategoryAsRead marks strictly active unread messages in target category updates Telephony Sms cancels category notifications and preserves archived and other categories`() = runBlocking {
+    fun `markAllActiveInCategoryAsRead marks strictly active unread messages in target category updates Telephony Sms cancels category notifications and preserves archived and other categories`(): Unit = runBlocking {
         grantDefaultSmsRole()
         assertTrue(app.container.systemSmsHelper.isDefaultSmsApp())
 
@@ -446,7 +447,7 @@ class CategoryMarkAllReadRobolectricTest {
     }
 
     @Test
-    fun `MessagesScreen inline category_mark_all_read_button and overflow menu_mark_all_read_in_tab isolate read state strictly per tab`() {
+    fun `MessagesScreen keeps Show unread strip clean without inline button and marks strictly active tab read via 3-dot menu`(): Unit {
         val personalUnread1 = buildThreadSummary(
             id = 101L,
             threadKey = "+919811112222",
@@ -455,7 +456,7 @@ class CategoryMarkAllReadRobolectricTest {
             timestampMillis = 1_700_400_050_000L,
             category = SmsCategory.PERSONAL,
             unreadCount = 1,
-            messageCount = 2
+            messageCount = 1
         )
         val personalUnread2 = buildThreadSummary(
             id = 102L,
@@ -607,7 +608,7 @@ class CategoryMarkAllReadRobolectricTest {
             }
         }
 
-        // 1. On PERSONAL (unreadCount = 2), inline category_mark_all_read_button ("Mark all as read") is displayed
+        // 1. On PERSONAL (unreadCount = 2), horizontal strip contains ONLY Show unread toggle + summary (no inline button)
         composeTestRule.onNodeWithTag("category_unread_filter_bar").assertIsDisplayed()
         composeTestRule.onNodeWithTag("category_unread_only_switch")
             .assertIsDisplayed()
@@ -615,16 +616,45 @@ class CategoryMarkAllReadRobolectricTest {
         composeTestRule.onNodeWithTag("category_unread_filter_summary", useUnmergedTree = true)
             .assertIsDisplayed()
             .assertTextContains("Unread only (2)")
-        composeTestRule.onNodeWithTag("category_mark_all_read_button")
-            .assertIsDisplayed()
-            .assertIsEnabled()
-            .assertTextContains("Mark all as read")
+        composeTestRule.onAllNodesWithTag("category_mark_all_read_button").assertCountEquals(0)
 
         composeTestRule.onNodeWithTag("thread_row_+919811112222").assertIsDisplayed()
         composeTestRule.onNodeWithTag("thread_row_+919833334444").assertIsDisplayed()
+        composeTestRule.onAllNodesWithTag("thread_row_+919855556666").assertCountEquals(0)
 
-        // Clicking inline category_mark_all_read_button marks ONLY PERSONAL read without toggling Show Unread switch
-        composeTestRule.onNodeWithTag("category_mark_all_read_button").performClick()
+        // Clicking category_unread_filter_bar cleanly toggles Show unread off ("All (3)") and back on ("Unread only (2)")
+        composeTestRule.onNodeWithTag("category_unread_filter_bar").performClick()
+        composeTestRule.waitForIdle()
+
+        composeTestRule.onNodeWithTag("category_unread_only_switch").assertIsOff()
+        composeTestRule.onNodeWithTag("category_unread_filter_summary", useUnmergedTree = true)
+            .assertIsDisplayed()
+            .assertTextContains("All (3)")
+        composeTestRule.onAllNodesWithTag("category_mark_all_read_button").assertCountEquals(0)
+        composeTestRule.onNodeWithTag("thread_row_+919855556666").assertIsDisplayed()
+
+        composeTestRule.onNodeWithTag("category_unread_filter_bar").performClick()
+        composeTestRule.waitForIdle()
+
+        composeTestRule.onNodeWithTag("category_unread_only_switch").assertIsOn()
+        composeTestRule.onNodeWithTag("category_unread_filter_summary", useUnmergedTree = true)
+            .assertIsDisplayed()
+            .assertTextContains("Unread only (2)")
+        composeTestRule.onAllNodesWithTag("category_mark_all_read_button").assertCountEquals(0)
+        composeTestRule.onAllNodesWithTag("thread_row_+919855556666").assertCountEquals(0)
+        assertTrue(recordedMarkReadCalls.isEmpty())
+
+        // 2. Open 3-dot overflow menu -> click menu_mark_all_read_in_tab ("Mark all as read in Personal")
+        composeTestRule.onNodeWithTag("inbox_overflow_menu_button")
+            .assertIsDisplayed()
+            .performClick()
+        composeTestRule.waitForIdle()
+
+        composeTestRule.onNodeWithTag("menu_mark_all_read_in_tab")
+            .assertIsDisplayed()
+            .assertIsEnabled()
+            .assertTextContains("Mark all as read in Personal")
+            .performClick()
         composeTestRule.waitForIdle()
 
         assertEquals(listOf(SmsCategory.PERSONAL to 2), recordedMarkReadCalls)
@@ -632,8 +662,9 @@ class CategoryMarkAllReadRobolectricTest {
         assertEquals(3, threadsByCategory.getValue(SmsCategory.TRANSACTIONAL).sumOf { it.unreadCount })
         assertEquals(1, threadsByCategory.getValue(SmsCategory.OTP).sumOf { it.unreadCount })
 
-        composeTestRule.onNodeWithTag("category_unread_only_switch").assertIsOn()
+        composeTestRule.onAllNodesWithTag("menu_mark_all_read_in_tab").assertCountEquals(0)
         composeTestRule.onAllNodesWithTag("category_mark_all_read_button").assertCountEquals(0)
+        composeTestRule.onNodeWithTag("category_unread_only_switch").assertIsOn()
         composeTestRule.onNodeWithTag("category_unread_filter_summary", useUnmergedTree = true)
             .assertIsDisplayed()
             .assertTextContains("Unread only (0)")
@@ -642,7 +673,7 @@ class CategoryMarkAllReadRobolectricTest {
         composeTestRule.mainClock.advanceTimeBy(5_000)
         composeTestRule.waitForIdle()
 
-        // Overflow menu item menu_mark_all_read_in_tab is disabled on PERSONAL once unreadCount == 0
+        // Re-opening overflow menu on PERSONAL shows menu_mark_all_read_in_tab disabled once unreadCount == 0
         composeTestRule.onNodeWithTag("inbox_overflow_menu_button")
             .assertIsDisplayed()
             .performClick()
@@ -658,20 +689,17 @@ class CategoryMarkAllReadRobolectricTest {
         composeTestRule.waitForIdle()
         composeTestRule.onAllNodesWithTag("menu_mark_all_read_in_tab").assertCountEquals(0)
 
-        // 2. Switch to tab_transactional -> TRANSACTIONAL's 3 unread messages remain untouched
+        // 3. Switch to tab_transactional -> TRANSACTIONAL's 3 unread messages remain untouched, zero inline button
         composeTestRule.onNodeWithTag("tab_transactional")
             .assertIsDisplayed()
             .performClick()
         composeTestRule.waitForIdle()
 
         assertEquals(SmsCategory.TRANSACTIONAL, selectedCategory)
+        composeTestRule.onAllNodesWithTag("category_mark_all_read_button").assertCountEquals(0)
         composeTestRule.onNodeWithTag("category_unread_filter_summary", useUnmergedTree = true)
             .assertIsDisplayed()
             .assertTextContains("Unread only (3)")
-        composeTestRule.onNodeWithTag("category_mark_all_read_button")
-            .assertIsDisplayed()
-            .assertIsEnabled()
-            .assertTextContains("Mark all as read")
         composeTestRule.onNodeWithTag("thread_row_VM-HDFCBK-T").assertIsDisplayed()
         composeTestRule.onNodeWithTag("thread_row_AD-ICICIB-T").assertIsDisplayed()
 
@@ -697,6 +725,7 @@ class CategoryMarkAllReadRobolectricTest {
 
         composeTestRule.onAllNodesWithTag("menu_mark_all_read_in_tab").assertCountEquals(0)
         composeTestRule.onAllNodesWithTag("category_mark_all_read_button").assertCountEquals(0)
+        composeTestRule.onNodeWithTag("category_unread_only_switch").assertIsOn()
         composeTestRule.onNodeWithTag("category_unread_filter_summary", useUnmergedTree = true)
             .assertIsDisplayed()
             .assertTextContains("Unread only (0)")
@@ -714,18 +743,34 @@ class CategoryMarkAllReadRobolectricTest {
             .assertIsNotEnabled()
         composeTestRule.onNodeWithTag("menu_sync_sms").performClick()
         composeTestRule.waitForIdle()
+        composeTestRule.onAllNodesWithTag("menu_mark_all_read_in_tab").assertCountEquals(0)
 
-        // OTP tab's unread message remains untouched after both PERSONAL and TRANSACTIONAL actions
+        // 4. Switch to OTP -> OTP still has 1 unread ("Unread only (1)"), zero inline button, and 3-dot menu item enabled
         composeTestRule.runOnIdle { selectedCategory = SmsCategory.OTP }
         composeTestRule.waitForIdle()
-        composeTestRule.onNodeWithTag("category_mark_all_read_button")
+
+        assertEquals(SmsCategory.OTP, selectedCategory)
+        composeTestRule.onAllNodesWithTag("category_mark_all_read_button").assertCountEquals(0)
+        composeTestRule.onNodeWithTag("category_unread_filter_summary", useUnmergedTree = true)
             .assertIsDisplayed()
-            .assertIsEnabled()
+            .assertTextContains("Unread only (1)")
         composeTestRule.onNodeWithTag("thread_row_VM-OTPBANK-T").assertIsDisplayed()
+
+        composeTestRule.onNodeWithTag("inbox_overflow_menu_button")
+            .assertIsDisplayed()
+            .performClick()
+        composeTestRule.waitForIdle()
+        composeTestRule.onNodeWithTag("menu_mark_all_read_in_tab")
+            .assertIsDisplayed()
+            .assertTextContains("Mark all as read in OTP")
+            .assertIsEnabled()
+        composeTestRule.onNodeWithTag("menu_sync_sms").performClick()
+        composeTestRule.waitForIdle()
+        composeTestRule.onAllNodesWithTag("menu_mark_all_read_in_tab").assertCountEquals(0)
     }
 
     @Test
-    fun `MainViewModel markAllReadInCategory updates categoryCounts and activeThreads reactively without affecting other categories or archived threads`() = runBlocking {
+    fun `MainViewModel markAllReadInCategory updates categoryCounts and activeThreads reactively without affecting other categories or archived threads`(): Unit = runBlocking {
         val smsDao = app.container.database.smsDao()
         val baseTime = 1_700_500_000_000L
 
