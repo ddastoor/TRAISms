@@ -1,4 +1,4 @@
-# TRAISms v1.0.3 — Actionable SMS Notifications & 4-Button OTP Shade
+# TRAISms v1.0.4 — Cleaner Show Unread Strip & 3-Dot Overflow Menu Polish
 
 **Package ID:** `com.traisms.app`  
 **Minimum Android Version:** Android 7.0 (API 24) • **Target SDK:** Android 16 (API 36)  
@@ -8,13 +8,13 @@
 
 ## Download & Install
 
-Download **`TRAISms-v1.0.3-release.apk`** from the **Assets** section below:
+Download **`TRAISms-v1.0.4-release.apk`** from the **Assets** section below:
 
 1. Verify the file's SHA-256 checksum against `SHA256SUMS.txt`:
    ```bash
    sha256sum -c SHA256SUMS.txt
    ```
-2. Transfer `TRAISms-v1.0.3-release.apk` to your Android phone and open it to install.
+2. Transfer `TRAISms-v1.0.4-release.apk` to your Android phone and open it to install.
 3. Launch **TRAISms** and tap **Set TRAISms as Default SMS App** to import and encrypt your existing SMS inbox on-device.
 
 ### Installing on Android 15 / 16 (Google Pixel & Sideloaded APKs)
@@ -31,14 +31,20 @@ To unlock Default SMS access in 3 steps:
 
 ---
 
-## What's New in v1.0.3
+## What's New in v1.0.4
 
-- **Independently Configurable Left & Right Swipe Gestures (`Archive`, `Delete`, `Assign Category`):**
-  - Both **Left Swipe** (`EndToStart`) and **Right Swipe** (`StartToEnd`) conversation motions across **Inbox** and **Archive** can now be independently configured to any of the 3 swipe actions under **Settings → Swipe Gestures & Archive**: **Archive** (or **Unarchive** in Archive, with **Undo**), **Delete**, or **Assign Category** (`MoveSenderCategoryBottomSheet`).
+- **Cleaner Horizontal "Show Unread" Strip (Zero Button Interference):**
+  - Removed the inline **Mark all as read** button from the horizontal per-category filter strip (`category_unread_filter_bar`) so the strip houses **only** the **Show unread** toggle, crisp single-line `Unread only (N)` / `All (N)` summary, and Material 3 switch without text crowding or touch-target interference on narrow screens.
+- **Exclusive 3-Dot (`⋮`) Overflow Menu "Mark All as Read in [Category]":**
+  - Kept per-category **Mark all as read in [Category]** exclusively inside the inbox **⋮** overflow menu (automatically enabled when `unreadCount > 0` and disabled when a tab has zero unread messages), surgically marking only active messages in the selected tab as read across SQLCipher Room and `Telephony.Sms` while dismissing their notifications and leaving all 7 other tabs and Archive untouched.
+
+### Previous Highlights (v1.0.3, v1.0.2 & v1.0.1)
+
+- **Independently Configurable Left & Right Swipe Gestures (`v1.0.3`):**
+  - Both **Left Swipe** (`EndToStart`) and **Right Swipe** (`StartToEnd`) conversation motions across **Inbox** and **Archive** can be independently configured to any of the 3 swipe actions under **Settings → Swipe Gestures & Archive**: **Archive** (or **Unarchive** in Archive, with **Undo**), **Delete**, or **Assign Category** (`MoveSenderCategoryBottomSheet`).
   - Persists `leftSwipeAction` (default: **Archive**) and `rightSwipeAction` (default: **Assign Category**) independently in Tink-encrypted DataStore (`AppSettings`), supporting all $3 \times 3 = 9$ combinations with dynamic live updates and contextual color-coded swipe backgrounds.
-- **Per-Category "Mark All as Read":**
-  - Added a one-tap **Mark all as read** button directly inside each category tab's filter bar whenever unread messages are present (`unreadCount > 0`), alongside **Mark all as read in [Category]** in the inbox **⋮** overflow menu (automatically disabled when a tab has zero unread messages).
-  - Surgically marks **only** active (unarchived) unread messages in the selected category tab as read (`isRead = true` in SQLCipher Room and `READ = 1` in Android's `Telephony.Sms` provider when TRAISms is the Default SMS app, while dismissing active notifications for those conversations) — leaving all 7 other category tabs and archived conversations completely untouched.
+- **Per-Category "Mark All as Read" (`v1.0.3`, refined to `⋮` menu in `v1.0.4`):**
+  - Surgically marks **only** active (unarchived) unread messages in the selected category tab as read via **Mark all as read in [Category]** in the inbox **⋮** overflow menu (`isRead = true` in SQLCipher Room and `READ = 1` in Android's `Telephony.Sms` provider when TRAISms is the Default SMS app, while dismissing active notifications for those conversations) — leaving all 7 other category tabs and archived conversations completely untouched.
 - **Automatic Mark-as-Read for New Promotional Messages:**
   - Newly received and post-setup delta-synced messages classified into the **Promotional** tab (`outcome.category == SmsCategory.PROMOTIONAL` — via TRAI `-P` headers, local ML promotional detection, or custom Promotional sender rules) are automatically marked as read (`isRead = true` in SQLCipher Room and `READ = 1` in Android's `Telephony.Sms` provider when TRAISms is the Default SMS app) so promotional clutter never inflates unread counts.
   - Strictly and exclusively scoped to **Promotional** — incoming messages across all 7 other categories (**Personal**, **Transactional**, **Service**, **OTP** including OTPs sent from `-P` headers, **Government**, **Unknown**, and **Other**) remain unread until opened, and initial device inbox imports preserve existing read/unread history.
@@ -57,9 +63,6 @@ To unlock Default SMS access in 3 steps:
 - **Long-Press SMS Copy & Forward:** Long-pressing any message bubble in an open conversation (`ThreadDetailScreen`) triggers haptic feedback and opens a Material 3 **Message Options** sheet with **Copy** (copies full SMS text to the clipboard with snackbar confirmation) and **Forward** (pre-fills the message body in **New Message** so you can pick a contact or enter a number), while preserving one-tap **Copy OTP** chips inside OTP bubbles.
 - **Customizable SMS Font Size (`Default`, `Large`, `Larger`) & Bold Text:** Added **Settings → SMS Text Appearance** with `Default` (`15sp` / `14sp`), `Large` (`18sp` / `16.5sp`), and `Larger` (`21sp` / `19sp`) font size presets, a **Bold SMS text** toggle, and a live sample preview — persisted in Tink-encrypted DataStore and applied across open conversation bubbles, reply/compose inputs, and inbox/archive previews.
 - **Expanded Robolectric 4.16.1 Verification Suite:** Added `IndependentSwipeActionsRobolectricTest`, `OtpAutoDeleteRobolectricTest`, and `SmsNotificationActionsRobolectricTest` covering independent Left/Right swipe configurations across all 9 action pairs in Inbox and Archive, surgical OTP auto-cleanup safety across all 8 categories and archived OTPs, in-tab and Settings preset bars, 4-button OTP custom views, 3-button non-OTP and App-Locked redaction, negative `hashCode()` thread notification cancellation, sensitive clipboard flags, background archive/delete database updates, and `MainActivity` `MoveSenderCategoryBottomSheet` + App Lock gating flows.
-
-### Previous Highlights (v1.0.2 & v1.0.1)
-
 - **New Message Keyboard Inset Fix & Smarter Contact Search (`v1.0.2`):** Eliminated double-applied `WindowInsets.ime` and `statusBars` insets across `MainActivity`, `ComposeSmsScreen`, and `ThreadDetailScreen` on Pixel / Android 15–16, and added digit-normalized formatted phone matching in `ContactLookupCache`, recipient clear/auto-focus UX, and direct-send rows for unsaved numbers.
 - **Pixel / Android 15+ Restricted Settings Recovery & Unified Versioning (`v1.0.1`):** Added built-in detection and one-tap **Open App Info** / **Open Default Apps** recovery shortcuts when Android blocks Default SMS role assignment on sideloaded APKs, alongside centralized `version.properties` versioning across Gradle, **Settings → About TRAISms**, APK filenames, and GitHub Releases.
 
@@ -82,7 +85,7 @@ Every incoming and imported SMS is evaluated completely offline in strict waterf
 
 ### 3. Fast Material 3 Light UI & Smart Controls
 - **Strict High-Contrast Light Mode:** Crisp `Plus Jakarta Sans` + `JetBrains Mono` typography and indexed Room queries for instant scrolling.
-- **Per-Tab Unread Filter & Mark All as Read:** Independent **Show unread** toggle across all 8 tabs (enabled by default) backed by Tink-encrypted DataStore preferences, one-tap read-history expansion, and per-tab **Mark all as read** (inline in the filter bar and in the **⋮** menu) strictly isolated to active messages in the current category.
+- **Per-Tab Unread Filter & Overflow Mark All as Read:** Horizontal filter strip housing exclusively the independent **Show unread** toggle across all 8 tabs (enabled by default and backed by Tink-encrypted DataStore preferences, with one-tap read-history expansion), while **Mark all as read in [Tab]** lives exclusively in the **⋮** overflow menu — strictly isolated to active messages in the current category.
 - **Independently Configurable Swipe Gestures:** Configure **Left Swipe** and **Right Swipe** independently across **Inbox** and **Archive** to **Archive**/**Unarchive** (with Undo), **Delete**, or **Assign Category** (opening **Move Sender Category** to save permanent sender rules).
 - **Targeted Promotional & OTP Auto-Delete:** Independent periodic 12-hour offline `WorkManager` cleanup schedules strictly restricted to unarchived **Promotional** (`7` days default) and unarchived **OTP** (`Off` default) messages (`Off`, `1`, `3`, `7`, `15`, or `30` days), configurable directly from in-tab preset bars and **Settings**.
 - **Bulk Hygiene:** Per-tab *Mark all as read in [Tab]* and *Delete all in [Tab]* actions, plus two-step *Delete All Messages in App* guarded by `DELETE` confirmation.

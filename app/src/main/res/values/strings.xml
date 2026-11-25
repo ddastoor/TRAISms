@@ -41,7 +41,6 @@
     <string name="empty_unread_category_title">No unread %1$s messages</string>
     <string name="empty_unread_with_read_subtitle">Turn off Show unread above to view all %1$d message(s) in %2$s.</string>
     <string name="show_all_in_category_button">Show all %1$s messages</string>
-    <string name="mark_all_read_short">Mark all as read</string>
     <string name="mark_all_read_in_tab">Mark all as read in %1$s</string>
     <string name="delete_all_in_tab">Delete all in %1$s</string>
     <string name="delete_all_in_app">Delete All Messages in App</string>

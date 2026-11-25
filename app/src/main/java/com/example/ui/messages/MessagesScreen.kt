@@ -89,6 +89,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.R
 import com.example.data.crypto.LeftSwipeAction
@@ -586,7 +587,9 @@ fun MessagesScreen(
                     ) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.weight(1f)
+                            modifier = Modifier
+                                .weight(1f)
+                                .padding(end = 12.dp)
                         ) {
                             Icon(
                                 imageVector = Icons.Outlined.MarkEmailUnread,
@@ -599,44 +602,20 @@ fun MessagesScreen(
                             Text(
                                 text = stringResource(R.string.show_unread_toggle_label),
                                 style = MaterialTheme.typography.labelLarge,
-                                fontWeight = FontWeight.SemiBold
+                                fontWeight = FontWeight.SemiBold,
+                                maxLines = 1,
+                                softWrap = false
                             )
                             Spacer(Modifier.width(8.dp))
                             Text(
                                 text = if (showUnreadOnly) "Unread only ($unreadInTab)" else "All ($totalInTab)",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                softWrap = false,
+                                overflow = TextOverflow.Ellipsis,
                                 modifier = Modifier.testTag("category_unread_filter_summary")
                             )
-                        }
-                        if (unreadInTab > 0) {
-                            TextButton(
-                                onClick = {
-                                    val targetCat = selectedCategory
-                                    onMarkAllReadInCurrentTab(targetCat) { markedCount ->
-                                        if (markedCount > 0) {
-                                            scope.launch {
-                                                snackbarHostState.showSnackbar(
-                                                    "Marked $markedCount ${targetCat.title} message(s) as read"
-                                                )
-                                            }
-                                        }
-                                    }
-                                },
-                                modifier = Modifier.testTag("category_mark_all_read_button")
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Outlined.DoneAll,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                                Spacer(Modifier.width(4.dp))
-                                Text(
-                                    text = stringResource(R.string.mark_all_read_short),
-                                    style = MaterialTheme.typography.labelMedium,
-                                    fontWeight = FontWeight.SemiBold
-                                )
-                            }
                         }
                         Switch(
                             checked = showUnreadOnly,

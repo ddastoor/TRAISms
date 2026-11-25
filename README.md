@@ -2,7 +2,7 @@
 
 **Production-grade, security-hardened, 100% offline Android SMS organizer** built with Kotlin, Jetpack Compose, Material Design 3, SQLCipher, Google Tink, Jetpack DataStore, LiteRT, and WorkManager.
 
-> **Latest Release & APK Download (`v1.0.3`):** Visit the [**GitHub Releases**](https://github.com/ddastoor/TRAISms/releases/latest) page to download `TRAISms-v1.0.3-release.apk` (pattern: `TRAISms-v<version>-release.apk`) and `SHA256SUMS.txt`.
+> **Latest Release & APK Download (`v1.0.4`):** Visit the [**GitHub Releases**](https://github.com/ddastoor/TRAISms/releases/latest) page to download `TRAISms-v1.0.4-release.apk` (pattern: `TRAISms-v<version>-release.apk`) and `SHA256SUMS.txt`.
 >
 > **Android 15+ / Pixel Sideloading Note:** Android 15/16's *Enhanced Confirmation Mode* blocks sideloaded APKs from becoming the Default SMS App until you allow restricted settings. If Android denies the request:
 > 1. Tap **Open App Info** in TRAISms (or open **Settings → Apps → TRAISms**).
@@ -26,7 +26,7 @@
 
 ## 8-Tab Exhaustive SMS Categorization
 
-Each tab includes an independent **Show unread** toggle (enabled by default and persisted per category in Tink-encrypted DataStore), a per-category **Mark all as read** action (inline in the filter bar whenever unread messages exist and via **Mark all as read in [Category]** in the **⋮** menu, strictly scoped to active messages in that tab without touching other categories or Archive), and **independently configurable Left & Right swipe gestures** (`Archive`, `Delete`, or `Assign Category`, persisted in Tink-encrypted DataStore across both **Inbox** and **Archive**) so your inbox stays focused on unread messages while keeping full read history and rapid triage one tap or swipe away:
+Each tab includes a dedicated horizontal **Show unread** toggle strip (enabled by default and persisted per category in Tink-encrypted DataStore), a per-category **Mark all as read in [Category]** action exclusively in the top-right **⋮** overflow menu (automatically disabled when a tab has zero unread messages, and strictly scoped to active messages in that tab without touching other categories or Archive), and **independently configurable Left & Right swipe gestures** (`Archive`, `Delete`, or `Assign Category`, persisted in Tink-encrypted DataStore across both **Inbox** and **Archive**) so your inbox stays focused on unread messages while keeping full read history and rapid triage one tap or swipe away:
 
 1. **Personal** — Saved device contacts & user-assigned personal senders
 2. **Transactional** — Banking, UPI, cards, invoices & TRAI `-T` headers
@@ -70,4 +70,4 @@ This repository includes [`.github/workflows/release-apk.yml`](.github/workflows
 2. Runs unit and Robolectric verification tests (`:app:testDebugUnitTest`).
 3. Builds signed release and debug APKs (`TRAISms-v<version>-release.apk` and `TRAISms-v<version>-debug.apk`).
 4. Verifies via `aapt2` that the release APK embeds the exact matching `versionName`/`versionCode` and contains zero network permissions.
-5. Generates `SHA256SUMS.txt` and uploads the versioned APKs + checksums (`TRAISms-v<version>-APKs`) as a workflow artifact on pushes to `main`/`master` (after `:app:testDebugUnitTest` and `aapt2` zero-network-permission verification), while publishing the formatted release page from [`RELEASE_NOTES.md`](RELEASE_NOTES.md) directly to [**GitHub Releases**](https://github.com/ddastoor/TRAISms/releases) when tagged `v*` (e.g. `v1.0.3`) or triggered manually via `workflow_dispatch` from the **Actions** tab.
+5. Generates `SHA256SUMS.txt` and uploads the versioned APKs + checksums (`TRAISms-v<version>-APKs`) as a workflow artifact on pushes to `main`/`master` (after `:app:testDebugUnitTest` and `aapt2` zero-network-permission verification), while publishing the formatted release page from [`RELEASE_NOTES.md`](RELEASE_NOTES.md) directly to [**GitHub Releases**](https://github.com/ddastoor/TRAISms/releases) when tagged `v*` (e.g. `v1.0.4`) or triggered manually via `workflow_dispatch` from the **Actions** tab.
