@@ -23,9 +23,10 @@ class SmsCategorizationPipeline(
         val source: String
     )
 
-    // Indian TRAI TCCCPR DLT commercial header pattern: e.g. VM-HDFCBK-T, AD-AIRTEL-S, JD-MYNTRA-P, AX-NDMAEW-G
-    private val traiDltHeaderRegex = Regex("(?i)^[A-Z]{2}[-\\s_]?[A-Z0-9]{3,9}[-\\s_]([PSTG])$")
+    // Indian TRAI TCCCPR DLT commercial header pattern: e.g. VM-HDFCBK-T, VM_HDFCBK_T, SBI_T, AD-AIRTEL-S, JD-MYNTRA-P, AX-NDMAEW-G
+    private val traiDltHeaderRegex = Regex("(?i)^(?:[A-Z0-9]{2,3}[-\\s_]?)?[A-Z0-9]{3,10}[-\\s_]([PSTG])$")
     private val traiConsentShortcodeRegex = Regex("^127\\d{3}$")
+    private val placeholderSenders = setOf("MMS-GATEWAY", "UNKNOWN", "UNKNOWN_SENDER", "INSERT-ADDRESS-TOKEN")
 
     fun categorize(
         rawAddress: String,
@@ -56,7 +57,8 @@ class SmsCategorizationPipeline(
             )
         }
 
-        val senderType = PhoneAndSenderNormalizer.classifySenderType(rawAddress)
+        val unwrappedAddress = PhoneAndSenderNormalizer.unwrapTransportAddress(rawAddress)
+        val senderType = PhoneAndSenderNormalizer.classifySenderType(unwrappedAddress)
         if (senderType == SenderAddressType.FULL_NUMERIC_PHONE) {
             // Unsaved 7+ digit raw mobile/telephone numbers without contact entry or alphanumeric header -> strictly Unknown
             return CategorizationOutcome(
@@ -78,8 +80,8 @@ class SmsCategorizationPipeline(
         }
 
         // LAYER 1C: India TRAI DLT Header Suffix Rules (Applied in IN or whenever sender matches TRAI DLT syntax)
-        val trimmedAddress = rawAddress.trim()
-        val traiMatch = traiDltHeaderRegex.matchEntire(trimmedAddress)
+        val coreHeader = unwrappedAddress.substringBefore('@').trim()
+        val traiMatch = traiDltHeaderRegex.matchEntire(coreHeader)
         if (traiMatch != null) {
             val suffix = traiMatch.groupValues[1].uppercase(Locale.ROOT)
             val category = when (suffix) {
@@ -97,8 +99,8 @@ class SmsCategorizationPipeline(
             )
         }
 
-        val digitsOnly = trimmedAddress.filter { it.isDigit() }
-        if ((activeRegion == RegionProfile.IN || trimmedAddress.length == 6) &&
+        val digitsOnly = coreHeader.filter { it.isDigit() }
+        if ((activeRegion == RegionProfile.IN || coreHeader.length == 6) &&
             traiConsentShortcodeRegex.matches(digitsOnly)
         ) {
             return CategorizationOutcome(
@@ -109,9 +111,22 @@ class SmsCategorizationPipeline(
             )
         }
 
+        if (coreHeader.uppercase(Locale.ROOT) in placeholderSenders &&
+            (body.isBlank() ||
+                body.contains("100% Offline Mode", ignoreCase = true) ||
+                body.startsWith("Incoming MMS", ignoreCase = true))
+        ) {
+            return CategorizationOutcome(
+                category = SmsCategory.OTHER,
+                extractedOtp = otpAnalysis.extractedCode,
+                confidenceScore = 0f,
+                source = "PENDING_MMS_FALLBACK"
+            )
+        }
+
         // LAYER 2: Local Bundled ML Model (OfflineSmsMlClassifier)
         val mlResult = mlClassifier.classify(
-            senderHeader = trimmedAddress,
+            senderHeader = coreHeader,
             body = body,
             region = activeRegion
         )

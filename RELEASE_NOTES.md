@@ -1,4 +1,4 @@
-# TRAISms v1.0.6 — Carrier MMS, Google Messages-Style RCS Rich UX & Launch Default SMS Chooser
+# TRAISms v1.0.7 — Eventual Categorization & RCS/TRAI Fallback Hardening
 
 **Package ID:** `com.traisms.app`  
 **Minimum Android Version:** Android 7.0 (API 24) • **Target SDK:** Android 16 (API 36)  
@@ -8,14 +8,14 @@
 
 ## Download & Install
 
-Download **`TRAISms-v1.0.6-release.apk`** from the **Assets** section below:
+Download **`TRAISms-v1.0.7-release.apk`** from the **Assets** section below:
 
 1. Verify the file's SHA-256 checksum against `SHA256SUMS.txt`:
    ```bash
    sha256sum -c SHA256SUMS.txt
    ```
-2. Transfer `TRAISms-v1.0.6-release.apk` to your Android phone and open it to install.
-3. Launch **TRAISms** and tap **Set TRAISms as Default SMS App** to import and encrypt your existing SMS inbox on-device.
+2. Transfer `TRAISms-v1.0.7-release.apk` to your Android phone and open it to install.
+3. Launch **TRAISms** and tap **Set TRAISms as Default SMS App** to import and encrypt your existing SMS/MMS inbox on-device.
 
 ### Installing on Android 15 / 16 (Google Pixel & Sideloaded APKs)
 
@@ -31,7 +31,14 @@ To unlock Default SMS access in 3 steps:
 
 ---
 
-## What's New in v1.0.6
+## What's New in v1.0.7
+
+- **Guaranteed Eventual Categorization & `Other` Fallback Across SMS, MMS, and RCS:**
+  - Unwraps RCS IMS/SIP/tel URIs (`tel:`, `sip:`, `@ims...`, `/TYPE=PLMN`) and cleans RBM agent domains (`@rbm.goog`) before categorizing so personal/unsaved RCS handles route cleanly to **Personal** or **Unknown** and uncategorizable RCS Business/MMS/SMS messages deterministically fall back into **Other**.
+  - Supports underscore/short TRAI DLT suffixes (`VM_HDFCBK_T`, `SBI_P`, `VM-HDFCBK-T@rbm.goog`) alongside `-P`/`-S`/`-T`/`-G` and `127xxx`.
+  - Automatically upgrades temporary **Other** `PENDING_DOWNLOAD` MMS placeholders once downloaded (`M-Retrieve.conf` or `Telephony.Mms` sync) and upgrades previously **Unknown** senders to **Personal** when saved into device Contacts, while preserving Group MMS/RCS in **Personal** across full re-categorization.
+
+### Previous Highlights (v1.0.6, v1.0.5, v1.0.4, v1.0.3, v1.0.2 & v1.0.1)
 
 - **Real Carrier MMS Send & Receive (Zero `INTERNET` Permissions):**
   - Added full OS-brokered `SmsManager` multimedia messaging (`sendMultimediaMessage` / `downloadMultimediaMessage`), a pure-Kotlin binary MMS PDU encoder/decoder (`M-Send.req`, `M-Notification.ind`, `M-Retrieve.conf`, `M-Delivery.ind`, `M-Read-Orig.ind`, SMIL multipart payloads), non-exported `FileProvider` staging, `MmsWapPushReceiver` auto/manual download handling, `Telephony.Mms` sync, group MMS recipients, optional MMS subjects, and non-destructive SQLCipher Room `MIGRATION_1_2` (`v1 -> v2`).

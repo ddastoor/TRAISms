@@ -58,7 +58,8 @@ data class RawSystemMms(
     val isIncoming: Boolean,
     val isRead: Boolean,
     val isRcsBridged: Boolean,
-    val parts: List<RawMmsPart>
+    val parts: List<RawMmsPart>,
+    val transactionId: String? = null
 )
 
 /**
@@ -312,7 +313,8 @@ class SystemSmsHelper(private val context: Context) {
             Telephony.Mms.MESSAGE_BOX,
             Telephony.Mms.READ,
             Telephony.Mms.SUBJECT,
-            Telephony.Mms.CREATOR
+            Telephony.Mms.CREATOR,
+            Telephony.Mms.TRANSACTION_ID
         )
 
         val buffer = ArrayList<RawSystemMms>(batchSize)
@@ -331,6 +333,7 @@ class SystemSmsHelper(private val context: Context) {
                 val readIdx = cursor.getColumnIndex(Telephony.Mms.READ)
                 val subIdx = cursor.getColumnIndex(Telephony.Mms.SUBJECT)
                 val creatorIdx = cursor.getColumnIndex(Telephony.Mms.CREATOR)
+                val txIdx = cursor.getColumnIndex(Telephony.Mms.TRANSACTION_ID)
 
                 while (cursor.moveToNext()) {
                     if (idIdx < 0) continue
@@ -349,6 +352,7 @@ class SystemSmsHelper(private val context: Context) {
                     val isRead = (if (readIdx >= 0) cursor.getInt(readIdx) == 1 else true) || !isIncoming
                     val subject = if (subIdx >= 0) cursor.getString(subIdx)?.trim()?.takeIf { it.isNotEmpty() } else null
                     val creator = if (creatorIdx >= 0) cursor.getString(creatorIdx).orEmpty() else ""
+                    val txId = if (txIdx >= 0) cursor.getString(txIdx)?.trim()?.takeIf { it.isNotEmpty() } else null
 
                     val (fromAddr, allAddrs) = readMmsAddresses(mmsId)
                     val (bodyText, parts, hasRcsPart) = readMmsParts(mmsId)
@@ -356,7 +360,10 @@ class SystemSmsHelper(private val context: Context) {
 
                     val isRcs = creator.contains("rcs", ignoreCase = true) ||
                         creator.contains("messaging", ignoreCase = true) && hasRcsPart ||
-                        hasRcsPart
+                        hasRcsPart ||
+                        fromAddr.contains("@rbm.", ignoreCase = true) ||
+                        fromAddr.contains(".rcs.", ignoreCase = true) ||
+                        fromAddr.startsWith("sip:", ignoreCase = true)
 
                     buffer.add(
                         RawSystemMms(
@@ -370,7 +377,8 @@ class SystemSmsHelper(private val context: Context) {
                             isIncoming = isIncoming,
                             isRead = isRead,
                             isRcsBridged = isRcs,
-                            parts = parts
+                            parts = parts,
+                            transactionId = txId
                         )
                     )
 

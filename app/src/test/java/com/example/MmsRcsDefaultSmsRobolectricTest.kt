@@ -89,6 +89,7 @@ import com.example.data.sms.PendingMmsAttachment
 import com.example.data.sms.RcsInteropCodec
 import com.example.data.sms.SmsMmsStatusReceiver
 import com.example.data.sms.SystemSmsHelper
+import com.example.domain.classifier.RegionProfile
 import com.example.ui.common.ThreadRowItem
 import com.example.ui.settings.SettingsScreen
 import com.example.ui.theme.TraiSmsTheme
@@ -1280,6 +1281,146 @@ class MmsRcsDefaultSmsRobolectricTest {
                 flushMainLooperAndSnapshots()
             }
         }
+        }
+    }
+
+    @Test
+    fun `Every SMS MMS and RCS message eventually categorizes across TRAI suffixes RBM agents SIP URIs pending downloads and contact sync with Other fallback`(): Unit {
+        runBlocking {
+            grantDefaultSmsRole()
+            val pipeline = app.container.pipeline
+            val repository = app.container.smsRepository
+            val smsDao = app.container.database.smsDao()
+
+            // 1. Underscore & short TRAI headers + RBM-suffixed TRAI header
+            assertEquals(
+                SmsCategory.TRANSACTIONAL,
+                pipeline.categorize("VM_HDFCBK_T", "Card statement ready", false, null, RegionProfile.IN).category
+            )
+            assertEquals(
+                SmsCategory.PROMOTIONAL,
+                pipeline.categorize("SBI_P", "Festive offers for you", false, null, RegionProfile.IN).category
+            )
+            assertEquals(
+                SmsCategory.TRANSACTIONAL,
+                pipeline.categorize("VM-HDFCBK-T@rbm.goog", "Alert notification", false, null, RegionProfile.IN).category
+            )
+
+            // 2. RCS Business Messaging categorizable vs uncategorizable -> OTHER fallback
+            assertEquals(
+                SmsCategory.TRANSACTIONAL,
+                pipeline.categorize("hdfcbank@rbm.goog", "Acct XX1234 debited INR 2,500.00 via UPI.", false, null, RegionProfile.IN).category
+            )
+            val uncategorizedRcs = pipeline.categorize(
+                rawAddress = "hello_bot@rbm.goog",
+                body = "Welcome aboard!",
+                isSavedContact = false,
+                customRuleCategory = null,
+                activeRegion = RegionProfile.IN
+            )
+            assertEquals(SmsCategory.OTHER, uncategorizedRcs.category)
+            assertEquals("LOW_CONF_FALLBACK", uncategorizedRcs.source)
+
+            val attachmentOnlyBot = pipeline.categorize(
+                rawAddress = "media_agent@rbm.goog",
+                body = "📷 Photo",
+                isSavedContact = false,
+                customRuleCategory = null,
+                activeRegion = RegionProfile.IN
+            )
+            assertEquals(SmsCategory.OTHER, attachmentOnlyBot.category)
+
+            // 3. RCS SIP / tel: URI normalization for contacts & unsaved numbers
+            assertEquals(
+                SmsCategory.UNKNOWN,
+                pipeline.categorize("tel:+919899887766", "Hello there", false, null, RegionProfile.IN).category
+            )
+            assertEquals(
+                SmsCategory.UNKNOWN,
+                pipeline.categorize("sip:+919899887766@ims.mnc045.mcc404.3gppnetwork.org", "Ping", false, null, RegionProfile.IN).category
+            )
+            assertEquals(
+                SmsCategory.PERSONAL,
+                pipeline.categorize("sip:+919876543210@ims.mnc045.mcc404.3gppnetwork.org", "Ping", true, null, RegionProfile.IN).category
+            )
+
+            // 4. Eventual categorization: Pending MMS gateway notification starts in OTHER, then upgrades to OTP upon download
+            app.container.settingsStore.updateSettings { it.copy(autoDownloadMms = false) }
+            val notifPdu = buildBinaryNotificationIndPdu(
+                transactionId = "tx_eventual_otp",
+                fromAddress = "MMS-GATEWAY",
+                contentLocation = "http://mmsc.carrier.local/mms/tx_eventual_otp",
+                subject = "",
+                sizeBytes = 2048L,
+                epochSeconds = 1_732_600_100L
+            )
+            MmsWapPushReceiver().onReceive(
+                context,
+                Intent(Telephony.Sms.Intents.WAP_PUSH_DELIVER_ACTION).apply {
+                    type = "application/vnd.wap.mms-message"
+                    putExtra("data", notifPdu)
+                }
+            )
+            waitForCondition { smsDao.getMessageByTransactionId("tx_eventual_otp") != null }
+            val pendingRow = smsDao.getMessageByTransactionId("tx_eventual_otp")!!
+            assertEquals(SmsCategory.OTHER, pendingRow.category)
+            assertEquals("PENDING_MMS_FALLBACK", pendingRow.classificationSource)
+
+            val retrievedOtpPdu = buildBinaryRetrieveConfPdu(
+                messageId = "srv_otp_1",
+                transactionId = "tx_eventual_otp",
+                fromAddress = "VM-HDFCBK-T",
+                toAddress = "+919811122233",
+                subject = "Security",
+                epochSeconds = 1_732_600_105L,
+                bodyText = "839201 is your OTP for login. Do not share.",
+                imageBytes = createTinyPngBytes()
+            )
+            val dlFile = File(systemSmsHelper.getMmsPduCacheDir(), "dl_eventual_otp.pdu").apply {
+                writeBytes(retrievedOtpPdu)
+            }
+            repository.handleDownloadedMmsPdu(
+                messageId = pendingRow.id,
+                pduFilePath = dlFile.absolutePath,
+                resultCode = Activity.RESULT_OK
+            )
+            val upgradedRow = smsDao.getMessageById(pendingRow.id)!!
+            assertEquals(SmsCategory.OTP, upgradedRow.category)
+            assertEquals("839201", upgradedRow.extractedOtp)
+            assertEquals("VM-HDFCBK-T", upgradedRow.threadKey)
+
+            // 5. Eventual categorization: Unsaved number SMS starts in UNKNOWN, upgrades to PERSONAL when Contacts sync
+            smsProvider.seedExistingMessage(
+                id = 9901L,
+                address = "+919812345678",
+                body = "Hey, are we meeting at 6?",
+                dateMillis = 1_732_600_200_000L,
+                type = Telephony.Sms.MESSAGE_TYPE_INBOX,
+                read = 0
+            )
+            repository.syncDeviceSmsInChunks()
+            val initiallyUnknown = smsDao.getMessagesInThreadSnapshot("NUM_9812345678").single()
+            assertEquals(SmsCategory.UNKNOWN, initiallyUnknown.category)
+            assertEquals("UNSAVED_NUMBER", initiallyUnknown.classificationSource)
+
+            contactsProvider.setContacts(listOf("Priya Nair" to "+91 98123 45678"))
+            repository.syncDeviceSmsInChunks()
+            val eventuallyPersonal = smsDao.getMessageById(initiallyUnknown.id)!!
+            assertEquals(SmsCategory.PERSONAL, eventuallyPersonal.category)
+            assertEquals("Priya Nair", eventuallyPersonal.contactName)
+            assertEquals("SAVED_CONTACT", eventuallyPersonal.classificationSource)
+
+            // 6. rerunCategorizationOnAllMessages preserves Group MMS in PERSONAL
+            val groupSend = repository.sendOutgoingMms(
+                recipients = listOf("+919899001122", "+919899003344"),
+                body = "See you all soon!",
+                subject = null,
+                attachments = emptyList()
+            )
+            val grpKey = groupSend.getOrThrow()
+            repository.rerunCategorizationOnAllMessages()
+            val grpMsg = smsDao.getMessagesInThreadSnapshot(grpKey).single()
+            assertEquals(SmsCategory.PERSONAL, grpMsg.category)
         }
     }
 

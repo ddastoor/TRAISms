@@ -231,9 +231,14 @@ class SmsRepository(
 
                         val contactName = contactCache.resolveContactName(rawMms.fromAddress)
                         val ruleCategory = existingRules[threadKey]?.category
+                        val classificationText = buildCategorizationText(
+                            subject = rawMms.subject,
+                            body = displayBody,
+                            extraText = rawMms.parts.firstOrNull { !it.textContent.isNullOrBlank() }?.textContent
+                        )
                         val outcome = pipeline.categorize(
                             rawAddress = rawMms.fromAddress,
-                            body = displayBody,
+                            body = classificationText,
                             isSavedContact = contactName != null || groupRecipients.isNotEmpty(),
                             customRuleCategory = ruleCategory,
                             activeRegion = region
@@ -259,29 +264,41 @@ class SmsRepository(
                             )
                         } else false
 
-                        val insertedMsgId = smsDao.insertMessage(
-                            SmsMessageEntity(
-                                systemMmsId = rawMms.systemMmsId,
-                                threadKey = threadKey,
-                                rawAddress = rawMms.fromAddress,
-                                contactName = contactName,
-                                body = displayBody,
-                                bodySha256 = bodySha,
-                                timestampMillis = rawMms.timestampMillis,
-                                isIncoming = rawMms.isIncoming,
-                                isRead = effectiveIsRead || folded,
-                                isArchived = false,
-                                category = outcome.category,
-                                extractedOtp = outcome.extractedOtp,
-                                confidenceScore = outcome.confidenceScore,
-                                classificationSource = outcome.source,
-                                transportType = if (rawMms.isRcsBridged) "RCS" else "MMS",
-                                deliveryStatus = if (rawMms.isIncoming) "NONE" else "SENT",
-                                mmsSubject = rawMms.subject,
-                                groupRecipientsJson = encodeRecipientsList(groupRecipients),
-                                isHiddenReaction = folded
-                            )
+                        val existingPending = rawMms.transactionId?.let { txId ->
+                            smsDao.getMessageByTransactionId(txId)
+                        }?.takeIf { it.deliveryStatus == "PENDING_DOWNLOAD" }
+
+                        val targetEntity = SmsMessageEntity(
+                            id = existingPending?.id ?: 0L,
+                            systemMmsId = rawMms.systemMmsId,
+                            threadKey = threadKey,
+                            rawAddress = rawMms.fromAddress,
+                            contactName = contactName,
+                            body = displayBody,
+                            bodySha256 = bodySha,
+                            timestampMillis = rawMms.timestampMillis,
+                            isIncoming = rawMms.isIncoming,
+                            isRead = effectiveIsRead || folded,
+                            isArchived = existingPending?.isArchived ?: false,
+                            category = outcome.category,
+                            extractedOtp = outcome.extractedOtp,
+                            confidenceScore = outcome.confidenceScore,
+                            classificationSource = outcome.source,
+                            transportType = if (rawMms.isRcsBridged) "RCS" else "MMS",
+                            deliveryStatus = if (rawMms.isIncoming) "NONE" else "SENT",
+                            mmsSubject = rawMms.subject ?: existingPending?.mmsSubject,
+                            mmsContentLocation = existingPending?.mmsContentLocation,
+                            mmsTransactionId = rawMms.transactionId ?: existingPending?.mmsTransactionId,
+                            groupRecipientsJson = encodeRecipientsList(groupRecipients),
+                            isHiddenReaction = folded
                         )
+
+                        val insertedMsgId = if (existingPending != null) {
+                            smsDao.updateMessage(targetEntity)
+                            existingPending.id
+                        } else {
+                            smsDao.insertMessage(targetEntity)
+                        }
 
                         if (rawMms.parts.isNotEmpty()) {
                             smsDao.insertAttachments(
@@ -336,6 +353,34 @@ class SmsRepository(
                                 )
                             )
                         }
+                    }
+                }
+
+                // Eventual contact-based upgrade for earlier UNSAVED_NUMBER -> UNKNOWN messages
+                val currentMessages = smsDao.getAllMessagesSnapshot()
+                val upgradedContacts = ArrayList<SmsMessageEntity>()
+                for (msg in currentMessages) {
+                    if (msg.isHiddenReaction) continue
+                    if (msg.category == SmsCategory.UNKNOWN &&
+                        msg.classificationSource == "UNSAVED_NUMBER" &&
+                        existingRules[msg.threadKey] == null
+                    ) {
+                        val resolved = contactCache.resolveContactName(msg.rawAddress)
+                        if (resolved != null) {
+                            upgradedContacts.add(
+                                msg.copy(
+                                    contactName = resolved,
+                                    category = SmsCategory.PERSONAL,
+                                    confidenceScore = 1.0f,
+                                    classificationSource = "SAVED_CONTACT"
+                                )
+                            )
+                        }
+                    }
+                }
+                if (upgradedContacts.isNotEmpty()) {
+                    for (chunk in upgradedContacts.chunked(500)) {
+                        smsDao.updateMessages(chunk)
                     }
                 }
 
@@ -669,13 +714,23 @@ class SmsRepository(
         }
         val contactName = contactCache.resolveContactName(rawSender)
         val rule = senderRuleDao.getRuleForSender(threadKey)
+        val classificationText = buildCategorizationText(
+            subject = parsed.subject,
+            body = bodyText,
+            extraText = attachmentEntities.firstOrNull { !it.textContent.isNullOrBlank() }?.textContent
+        )
         val outcome = pipeline.categorize(
             rawAddress = rawSender,
-            body = bodyText,
+            body = classificationText,
             isSavedContact = contactName != null || isGroup,
             customRuleCategory = rule?.category,
             activeRegion = region
         )
+        val isRcsPayload = parsed.parts.any {
+            it.contentType.contains("rcs", ignoreCase = true) ||
+                it.contentType.contains("gsma", ignoreCase = true)
+        } || rawSender.contains("@rbm.", ignoreCase = true) ||
+            rawSender.contains(".rcs.", ignoreCase = true)
         val autoMarkRead = outcome.category == SmsCategory.PROMOTIONAL
         val timestampMillis = parsed.dateEpochSeconds.takeIf { it > 0L }?.times(1000L)
             ?: fallbackTimestampMillis
@@ -728,7 +783,7 @@ class SmsRepository(
             extractedOtp = outcome.extractedOtp,
             confidenceScore = outcome.confidenceScore,
             classificationSource = outcome.source,
-            transportType = "MMS",
+            transportType = if (isRcsPayload) "RCS" else "MMS",
             deliveryStatus = if (parsed.readReportRequested && !autoMarkRead) "READ_REPORT_REQUESTED" else "NONE",
             mmsSubject = parsed.subject ?: existingPendingMessage?.mmsSubject,
             mmsContentLocation = parsed.contentLocation ?: existingPendingMessage?.mmsContentLocation,
@@ -793,10 +848,13 @@ class SmsRepository(
             customRuleCategory = rule?.category,
             activeRegion = region
         )
-        val assignedCategory = if (contactName != null) {
-            rule?.category ?: SmsCategory.PERSONAL
-        } else {
-            outcome.category
+        val assignedCategory = when {
+            contactName != null -> rule?.category ?: SmsCategory.PERSONAL
+            rule != null -> rule.category
+            outcome.source == "LOW_CONF_FALLBACK" -> {
+                smsDao.getMessagesInThreadSnapshot(threadKey).firstOrNull()?.category ?: outcome.category
+            }
+            else -> outcome.category
         }
 
         val quotedTarget = replyToMessageId?.let { smsDao.getMessageById(it) }
@@ -905,10 +963,13 @@ class SmsRepository(
             customRuleCategory = rule?.category,
             activeRegion = region
         )
-        val assignedCategory = if (contactName != null || isGroup) {
-            rule?.category ?: SmsCategory.PERSONAL
-        } else {
-            outcome.category
+        val assignedCategory = when {
+            contactName != null || isGroup -> rule?.category ?: SmsCategory.PERSONAL
+            rule != null -> rule.category
+            outcome.source == "LOW_CONF_FALLBACK" -> {
+                smsDao.getMessagesInThreadSnapshot(threadKey).firstOrNull()?.category ?: outcome.category
+            }
+            else -> outcome.category
         }
 
         val quotedTarget = replyToMessageId?.let { smsDao.getMessageById(it) }
@@ -1283,6 +1344,16 @@ class SmsRepository(
         }.getOrDefault(emptyList())
     }
 
+    private fun buildCategorizationText(
+        subject: String?,
+        body: String,
+        extraText: String? = null
+    ): String = listOfNotNull(
+        subject?.trim()?.takeIf { it.isNotEmpty() },
+        body.trim().takeIf { it.isNotEmpty() },
+        extraText?.trim()?.takeIf { it.isNotEmpty() }
+    ).distinct().joinToString("\n")
+
     private fun buildAttachmentFallbackSummary(mimeTypes: List<String>): String {
         val first = mimeTypes.firstOrNull()?.lowercase(Locale.ROOT) ?: return "MMS message"
         return when {
@@ -1497,12 +1568,15 @@ class SmsRepository(
         if (allMessages.isEmpty()) return@withContext 0
 
         val updated = allMessages.map { msg ->
+            if (msg.isHiddenReaction) return@map msg
             val contactName = contactCache.resolveContactName(msg.rawAddress) ?: msg.contactName
+            val isGroup = msg.threadKey.startsWith("GRP_") || decodeRecipientsList(msg.groupRecipientsJson).size > 1
             val ruleCategory = rulesMap[msg.threadKey]?.category
+            val classificationText = buildCategorizationText(msg.mmsSubject, msg.body)
             val outcome = pipeline.categorize(
                 rawAddress = msg.rawAddress,
-                body = msg.body,
-                isSavedContact = contactName != null,
+                body = classificationText,
+                isSavedContact = contactName != null || isGroup,
                 customRuleCategory = ruleCategory,
                 activeRegion = region
             )
