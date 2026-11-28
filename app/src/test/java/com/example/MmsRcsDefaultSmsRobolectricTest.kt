@@ -40,6 +40,7 @@ import androidx.compose.runtime.snapshots.ObserverHandle
 import androidx.compose.runtime.snapshots.Snapshot
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.AndroidUiDispatcher
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
@@ -57,9 +58,11 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performScrollToIndex
 import androidx.compose.ui.test.performScrollToNode
+import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
 import androidx.room.Room
 import androidx.sqlite.db.SupportSQLiteDatabase
 import androidx.sqlite.db.SupportSQLiteOpenHelper
@@ -887,55 +890,76 @@ class MmsRcsDefaultSmsRobolectricTest {
                     }
                 }
 
+                composeTestRule.waitForIdle()
                 composeTestRule.waitUntil(timeoutMillis = 5_000) {
                     composeTestRule.onAllNodesWithTag("thread_messages_list").fetchSemanticsNodes().isNotEmpty()
                 }
                 composeTestRule.onNodeWithTag("thread_messages_list").performScrollToIndex(0)
-                composeTestRule.waitUntil(timeoutMillis = 5_000) {
-                    composeTestRule.onAllNodesWithTag("mms_download_card_11").fetchSemanticsNodes().isNotEmpty()
-                }
-                composeTestRule.onNodeWithTag("mms_subject_header_11").assertIsDisplayed()
-                composeTestRule.onNodeWithTag("download_mms_button_11").performClick()
+                composeTestRule.waitForIdle()
+                composeTestRule.onNodeWithTag("mms_download_card_11", useUnmergedTree = true).assertIsDisplayed()
+                composeTestRule.onNodeWithTag("mms_subject_header_11", useUnmergedTree = true).assertIsDisplayed()
+                composeTestRule.onNodeWithTag("download_mms_button_11", useUnmergedTree = true)
+                    .performSemanticsAction(SemanticsActions.OnClick)
+                composeTestRule.waitForIdle()
                 assertEquals(listOf(11L), downloadedIds)
 
                 // Verify media attachments + reaction pill + quoted preview + status labels
                 composeTestRule.onNodeWithTag("thread_messages_list").performScrollToIndex(1)
-                composeTestRule.onNodeWithTag("mms_image_preview_201").performScrollTo().assertIsDisplayed()
-                composeTestRule.onNodeWithTag("mms_video_card_202").performScrollTo().assertIsDisplayed()
-                composeTestRule.onNodeWithTag("mms_audio_card_203").performScrollTo().assertIsDisplayed()
-                composeTestRule.onNodeWithTag("mms_file_card_204").performScrollTo().assertIsDisplayed()
-                composeTestRule.onNodeWithTag("reaction_pills_row_12").performScrollTo().assertIsDisplayed()
-                composeTestRule.onNodeWithTag("reaction_pill_12_👍").assertIsDisplayed()
+                composeTestRule.waitForIdle()
+                composeTestRule.onNodeWithTag("mms_image_preview_201", useUnmergedTree = true).assertExists()
+                composeTestRule.onNodeWithTag("mms_video_card_202", useUnmergedTree = true).assertExists()
+                composeTestRule.onNodeWithTag("mms_audio_card_203", useUnmergedTree = true).assertExists()
+                composeTestRule.onNodeWithTag("mms_file_card_204", useUnmergedTree = true).assertExists()
+                composeTestRule.onNodeWithTag("reaction_pills_row_12", useUnmergedTree = true).assertExists()
+                composeTestRule.onNodeWithTag("reaction_pill_12_👍", useUnmergedTree = true).assertExists()
 
                 // Emoji reaction bar + tapback selection on message 12
-                composeTestRule.onNodeWithTag("react_msg_button_12").performScrollTo().performClick()
-                composeTestRule.onNodeWithTag("emoji_reaction_bar_12").assertIsDisplayed()
-                composeTestRule.onNodeWithTag("reaction_emoji_12_1").performClick()
+                composeTestRule.onNodeWithTag("react_msg_button_12", useUnmergedTree = true)
+                    .performSemanticsAction(SemanticsActions.OnClick)
+                composeTestRule.waitForIdle()
+                composeTestRule.onNodeWithTag("emoji_reaction_bar_12", useUnmergedTree = true).assertExists()
+                composeTestRule.onNodeWithTag("reaction_emoji_12_1", useUnmergedTree = true)
+                    .performSemanticsAction(SemanticsActions.OnClick)
+                composeTestRule.waitForIdle()
                 assertEquals(listOf(12L to "❤️"), toggledReactions)
 
                 // Reply banner + cancel + send quoted reply on message 12
-                composeTestRule.onNodeWithTag("reply_msg_button_12").performScrollTo().performClick()
-                composeTestRule.onNodeWithTag("reply_context_banner").assertIsDisplayed()
-                composeTestRule.onNodeWithTag("cancel_reply_button").performClick()
-                composeTestRule.onAllNodesWithTag("reply_context_banner").assertCountEquals(0)
+                composeTestRule.onNodeWithTag("reply_msg_button_12", useUnmergedTree = true)
+                    .performSemanticsAction(SemanticsActions.OnClick)
+                composeTestRule.waitForIdle()
+                composeTestRule.onNodeWithTag("reply_context_banner", useUnmergedTree = true).assertExists()
+                composeTestRule.onNodeWithTag("cancel_reply_button", useUnmergedTree = true)
+                    .performSemanticsAction(SemanticsActions.OnClick)
+                composeTestRule.waitForIdle()
+                composeTestRule.onAllNodesWithTag("reply_context_banner", useUnmergedTree = true).assertCountEquals(0)
 
-                composeTestRule.onNodeWithTag("reply_msg_button_12").performScrollTo().performClick()
+                composeTestRule.onNodeWithTag("reply_msg_button_12", useUnmergedTree = true)
+                    .performSemanticsAction(SemanticsActions.OnClick)
+                composeTestRule.waitForIdle()
                 composeTestRule.onNodeWithTag("thread_reply_input").performTextInput("Sounds good!")
                 composeTestRule.onNodeWithTag("thread_send_button").performClick()
+                composeTestRule.waitForIdle()
                 assertEquals(listOf(Triple("+919876543210", "Sounds good!", 12L)), sentQuotes)
 
                 composeTestRule.onNodeWithTag("thread_messages_list").performScrollToIndex(2)
-                composeTestRule.onNodeWithTag("quoted_reply_preview_13").performScrollTo().assertIsDisplayed()
-                composeTestRule.onNodeWithTag("message_status_13").performScrollTo().assertTextContains("Delivered", substring = true)
+                composeTestRule.waitForIdle()
+                composeTestRule.onNodeWithTag("quoted_reply_preview_13", useUnmergedTree = true).assertExists()
+                composeTestRule.onNodeWithTag("message_status_13", useUnmergedTree = true)
+                    .assertTextContains("Delivered", substring = true)
 
                 composeTestRule.onNodeWithTag("thread_messages_list").performScrollToIndex(3)
-                composeTestRule.onNodeWithTag("message_status_14").performScrollTo().assertTextContains("Failed", substring = true)
-                composeTestRule.onNodeWithTag("retry_failed_msg_14").performScrollTo().performClick()
+                composeTestRule.waitForIdle()
+                composeTestRule.onNodeWithTag("message_status_14", useUnmergedTree = true)
+                    .assertTextContains("Failed", substring = true)
+                composeTestRule.onNodeWithTag("retry_failed_msg_14", useUnmergedTree = true)
+                    .performSemanticsAction(SemanticsActions.OnClick)
+                composeTestRule.waitForIdle()
                 assertEquals(listOf(14L), retriedIds)
 
                 // Long-press preserves strictly Copy & Forward prompt contract
                 composeTestRule.onNodeWithTag("thread_messages_list").performScrollToIndex(2)
-                composeTestRule.onNodeWithTag("thread_message_bubble_13").performScrollTo().performTouchInput { longClick() }
+                composeTestRule.waitForIdle()
+                composeTestRule.onNodeWithTag("thread_message_bubble_13").performTouchInput { longClick() }
                 composeTestRule.waitUntil(timeoutMillis = 5_000) {
                     composeTestRule.onAllNodesWithTag("message_actions_prompt").fetchSemanticsNodes().isNotEmpty()
                 }
@@ -1122,65 +1146,77 @@ class MmsRcsDefaultSmsRobolectricTest {
         assertEquals(context.packageName, fallbackIntent.getStringExtra(Telephony.Sms.Intents.EXTRA_PACKAGE_NAME))
 
         // 1. Cold start when NOT default SMS app -> pops chooser once settings emit
-        Robolectric.buildActivity(MainActivity::class.java).use { controller ->
-            controller.setup()
-            val activity = controller.get()
-            val shadowActivity = Shadows.shadowOf(activity)
+        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
             try {
-                waitForCondition(timeoutMillis = 8_000) {
-                    flushMainLooperAndSnapshots()
-                    shadowActivity.peekNextStartedActivityForResult() != null
+                composeTestRule.waitUntil(timeoutMillis = 5_000) {
+                    var started = false
+                    scenario.onActivity { activity ->
+                        started = Shadows.shadowOf(activity).peekNextStartedActivityForResult() != null
+                    }
+                    started
                 }
-                val firstLaunch = shadowActivity.nextStartedActivityForResult
-                assertNotNull(firstLaunch)
-                assertTrue(
-                    firstLaunch.intent.action == Telephony.Sms.Intents.ACTION_CHANGE_DEFAULT ||
-                        firstLaunch.intent.getStringExtra("android.intent.extra.ROLE_NAME") == RoleManager.ROLE_SMS ||
-                        firstLaunch.intent.action?.contains("ROLE", ignoreCase = true) == true
-                )
+                var firstRequestCode = -1
+                scenario.onActivity { activity ->
+                    val firstLaunch = Shadows.shadowOf(activity).nextStartedActivityForResult
+                    assertNotNull(firstLaunch)
+                    firstRequestCode = firstLaunch.requestCode
+                    assertTrue(
+                        firstLaunch.intent.action == Telephony.Sms.Intents.ACTION_CHANGE_DEFAULT ||
+                            firstLaunch.intent.getStringExtra("android.intent.extra.ROLE_NAME") == RoleManager.ROLE_SMS ||
+                            firstLaunch.intent.action?.contains("ROLE", ignoreCase = true) == true
+                    )
+                }
 
                 // 2. Dismissing chooser via onPause -> onResume must NOT relaunch (anti-loop guard)
-                controller.pause().resume()
-                flushMainLooperAndSnapshots()
-                Thread.sleep(50)
-                flushMainLooperAndSnapshots()
-                assertNull(
-                    "onPause->onResume dismissal must not trigger infinite relaunch",
-                    shadowActivity.peekNextStartedActivityForResult()
-                )
+                scenario.moveToState(Lifecycle.State.STARTED)
+                scenario.moveToState(Lifecycle.State.RESUMED)
+                composeTestRule.waitForIdle()
+                scenario.onActivity { activity ->
+                    assertNull(
+                        "onPause->onResume dismissal must not trigger infinite relaunch",
+                        Shadows.shadowOf(activity).peekNextStartedActivityForResult()
+                    )
+                }
 
                 // 3. Full-screen chooser onStop -> ActivityResult(CANCELED) -> onStart -> onResume must NOT relaunch
-                controller.pause().stop()
-                activity.activityResultRegistry.dispatchResult(
-                    firstLaunch.requestCode,
-                    Activity.RESULT_CANCELED,
-                    null
-                )
-                controller.start().resume()
-                flushMainLooperAndSnapshots()
-                Thread.sleep(50)
-                flushMainLooperAndSnapshots()
-                assertNull(
-                    "Returning from chooser ActivityResult must not loop",
-                    shadowActivity.peekNextStartedActivityForResult()
-                )
+                scenario.moveToState(Lifecycle.State.CREATED)
+                scenario.onActivity { activity ->
+                    activity.activityResultRegistry.dispatchResult(
+                        firstRequestCode,
+                        Activity.RESULT_CANCELED,
+                        null
+                    )
+                }
+                scenario.moveToState(Lifecycle.State.RESUMED)
+                composeTestRule.waitForIdle()
+                scenario.onActivity { activity ->
+                    assertNull(
+                        "Returning from chooser ActivityResult must not loop",
+                        Shadows.shadowOf(activity).peekNextStartedActivityForResult()
+                    )
+                }
 
                 // 4. Genuine backgrounding (onStop -> onStart while NOT requesting role) prompts once again
-                controller.pause().stop()
-                controller.start().resume()
-                waitForCondition(timeoutMillis = 8_000) {
-                    flushMainLooperAndSnapshots()
-                    shadowActivity.peekNextStartedActivityForResult() != null
+                scenario.moveToState(Lifecycle.State.CREATED)
+                scenario.moveToState(Lifecycle.State.RESUMED)
+                composeTestRule.waitUntil(timeoutMillis = 5_000) {
+                    var started = false
+                    scenario.onActivity { activity ->
+                        started = Shadows.shadowOf(activity).peekNextStartedActivityForResult() != null
+                    }
+                    started
                 }
-                val relaunched = shadowActivity.nextStartedActivityForResult
-                assertNotNull("Expected chooser prompt on foreground return after onStop->onStart", relaunched)
-                activity.activityResultRegistry.dispatchResult(
-                    relaunched.requestCode,
-                    Activity.RESULT_CANCELED,
-                    null
-                )
+                scenario.onActivity { activity ->
+                    val relaunched = Shadows.shadowOf(activity).nextStartedActivityForResult
+                    assertNotNull("Expected chooser prompt on foreground return after onStop->onStart", relaunched)
+                    activity.activityResultRegistry.dispatchResult(
+                        relaunched.requestCode,
+                        Activity.RESULT_CANCELED,
+                        null
+                    )
+                }
             } finally {
-                activity.setContentView(View(activity))
+                scenario.onActivity { it.setContentView(View(it)) }
                 flushMainLooperAndSnapshots()
             }
         }
@@ -1242,9 +1278,7 @@ class MmsRcsDefaultSmsRobolectricTest {
     }
 
     @Suppress("DEPRECATION")
-    private fun resolveTestSmsManager(): SmsManager {
-        return context.getSystemService(SmsManager::class.java) ?: SmsManager.getDefault()
-    }
+    private fun resolveTestSmsManager(): SmsManager = SmsManager.getDefault()
 
     private fun grantDefaultSmsRole() {
         ShadowRoleManager.addRoleHolder(
