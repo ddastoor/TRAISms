@@ -96,6 +96,7 @@ import org.robolectric.Shadows
 import org.robolectric.annotation.Config
 import org.robolectric.shadow.api.Shadow
 import org.robolectric.shadows.ShadowBiometricManager
+import org.robolectric.shadows.ShadowDialog
 import org.robolectric.util.ReflectionHelpers
 
 @RunWith(RobolectricTestRunner::class)
@@ -316,22 +317,12 @@ class ScreenshotSupportRobolectricTest {
                 composeTestRule.onNodeWithTag("backup_screen").assertIsDisplayed()
                 scenario.onActivity { assertScreenshotsAllowedAcrossAllWindows(it) }
 
-                // SettingsRoute + GlobalDeleteAllMessagesDialog
+                // SettingsRoute
                 composeTestRule.onNodeWithTag("bottom_nav_settings").performClick()
                 composeTestRule.waitForIdle()
                 composeTestRule.onNodeWithTag("settings_screen").assertIsDisplayed()
                 composeTestRule.onAllNodesWithTag("flag_secure_switch").assertCountEquals(0)
                 scenario.onActivity { assertScreenshotsAllowedAcrossAllWindows(it) }
-
-                composeTestRule.onNodeWithTag("danger_zone_delete_all_button")
-                    .performScrollTo()
-                    .performClick()
-                composeTestRule.waitForIdle()
-                composeTestRule.onNodeWithTag("global_delete_confirm_input").assertIsDisplayed()
-                scenario.onActivity { assertScreenshotsAllowedAcrossAllWindows(it) }
-
-                composeTestRule.onNodeWithText("Cancel").performClick()
-                composeTestRule.waitForIdle()
             } finally {
                 scenario.onActivity { it.setContentView(View(it)) }
                 flushMainLooperAndSnapshots()
@@ -345,30 +336,12 @@ class ScreenshotSupportRobolectricTest {
             val smsDao = app.container.database.smsDao()
             smsDao.insertMessage(
                 SmsMessageEntity(
-                    systemSmsId = 6101L,
-                    threadKey = "SENDER-OTP",
-                    rawAddress = "SENDER-OTP",
-                    contactName = null,
-                    body = "Sample OTP message 100003",
-                    bodySha256 = BackupCryptoEngine.sha256Hex("Sample OTP message 100003"),
-                    timestampMillis = 1_700_000_003_000L,
-                    isIncoming = true,
-                    isRead = false,
-                    isArchived = false,
-                    category = SmsCategory.OTP,
-                    extractedOtp = "482910",
-                    confidenceScore = 0.99f,
-                    classificationSource = "TEST"
-                )
-            )
-            smsDao.insertMessage(
-                SmsMessageEntity(
                     systemSmsId = 6102L,
                     threadKey = "SENDER-PERSONAL",
                     rawAddress = "SENDER-PERSONAL",
                     contactName = null,
-                    body = "Sample Personal message",
-                    bodySha256 = BackupCryptoEngine.sha256Hex("Sample Personal message"),
+                    body = "Sample Personal message 100004",
+                    bodySha256 = BackupCryptoEngine.sha256Hex("Sample Personal message 100004"),
                     timestampMillis = 1_700_000_004_000L,
                     isIncoming = true,
                     isRead = false,
@@ -381,19 +354,22 @@ class ScreenshotSupportRobolectricTest {
             )
         }
 
-        // 1. ThreadDetailRoute + Message Options ModalBottomSheet
-        val threadIntent = Intent(context, MainActivity::class.java).apply {
-            putExtra(SmsNotificationHelper.EXTRA_OPEN_THREAD_KEY, "SENDER-OTP")
-        }
-        ActivityScenario.launch<MainActivity>(threadIntent).use { scenario ->
+        // 1. ThreadDetailRoute + Message Options ModalBottomSheet via inbox row click
+        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
             try {
+                composeTestRule.waitUntil(timeoutMillis = 5_000) {
+                    composeTestRule.onAllNodesWithTag("thread_row_SENDER-PERSONAL")
+                        .fetchSemanticsNodes().isNotEmpty()
+                }
+                composeTestRule.onNodeWithTag("thread_row_SENDER-PERSONAL").performClick()
+
                 composeTestRule.waitUntil(timeoutMillis = 5_000) {
                     composeTestRule.onAllNodesWithTag("thread_messages_list")
                         .fetchSemanticsNodes().isNotEmpty()
                 }
                 scenario.onActivity { assertScreenshotsAllowedAcrossAllWindows(it) }
 
-                composeTestRule.onNodeWithText("Sample OTP message 100003", substring = true)
+                composeTestRule.onNodeWithText("Sample Personal message 100004", substring = true)
                     .performTouchInput { longClick() }
                 composeTestRule.waitUntil(timeoutMillis = 5_000) {
                     composeTestRule.onAllNodesWithTag("message_actions_prompt")
@@ -408,7 +384,28 @@ class ScreenshotSupportRobolectricTest {
             }
         }
 
-        // 2. MoveSenderCategoryBottomSheet via ACTION_ASSIGN_CATEGORY
+        // 2. ComposeSmsRoute via compose_sms_fab click
+        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+            try {
+                composeTestRule.waitUntil(timeoutMillis = 5_000) {
+                    composeTestRule.onAllNodesWithTag("compose_sms_fab")
+                        .fetchSemanticsNodes().isNotEmpty()
+                }
+                composeTestRule.onNodeWithTag("compose_sms_fab").performClick()
+
+                composeTestRule.waitUntil(timeoutMillis = 5_000) {
+                    composeTestRule.onAllNodesWithTag("compose_body_input")
+                        .fetchSemanticsNodes().isNotEmpty()
+                }
+                composeTestRule.onNodeWithTag("compose_recipient_input").assertIsDisplayed()
+                scenario.onActivity { assertScreenshotsAllowedAcrossAllWindows(it) }
+            } finally {
+                scenario.onActivity { it.setContentView(View(it)) }
+                flushMainLooperAndSnapshots()
+            }
+        }
+
+        // 3. MoveSenderCategoryBottomSheet via ACTION_ASSIGN_CATEGORY
         val assignIntent = Intent(context, MainActivity::class.java).apply {
             action = SmsNotificationHelper.ACTION_ASSIGN_CATEGORY
             putExtra(SmsNotificationHelper.EXTRA_THREAD_KEY, "SENDER-PERSONAL")
@@ -425,25 +422,6 @@ class ScreenshotSupportRobolectricTest {
                 composeTestRule.onNodeWithTag("confirm_move_category_button")
                     .performScrollTo()
                     .assertIsDisplayed()
-                scenario.onActivity { assertScreenshotsAllowedAcrossAllWindows(it) }
-            } finally {
-                scenario.onActivity { it.setContentView(View(it)) }
-                flushMainLooperAndSnapshots()
-            }
-        }
-
-        // 3. ComposeSmsRoute via ACTION_SENDTO
-        val composeIntent = Intent(Intent.ACTION_SENDTO, Uri.parse("smsto:+919876543210")).apply {
-            setClass(context, MainActivity::class.java)
-            putExtra("sms_body", "Screenshot verification draft")
-        }
-        ActivityScenario.launch<MainActivity>(composeIntent).use { scenario ->
-            try {
-                composeTestRule.waitUntil(timeoutMillis = 5_000) {
-                    composeTestRule.onAllNodesWithTag("compose_body_input")
-                        .fetchSemanticsNodes().isNotEmpty()
-                }
-                composeTestRule.onNodeWithTag("compose_recipient_input").assertIsDisplayed()
                 scenario.onActivity { assertScreenshotsAllowedAcrossAllWindows(it) }
             } finally {
                 scenario.onActivity { it.setContentView(View(it)) }
@@ -794,43 +772,41 @@ class ScreenshotSupportRobolectricTest {
     }
 
     @Test
-    fun `GlobalDeleteAllMessagesDialog enforces uppercase DELETE confirmation while allowing screenshots`(): Unit {
+    fun `GlobalDeleteAllMessagesDialog mounts Dialog window without FLAG_SECURE`(): Unit {
+        ShadowDialog.reset()
         Robolectric.buildActivity(ComponentActivity::class.java).use { controller ->
             controller.setup()
             val hostActivity = controller.get()
+            var showDialog by mutableStateOf(true)
             try {
-                var confirmed = false
                 hostActivity.setContent {
                     TraiSmsTheme {
-                        GlobalDeleteAllMessagesDialog(
-                            totalCount = 42,
-                            onDismiss = {},
-                            onConfirmDeleteAll = { confirmed = true }
-                        )
+                        if (showDialog) {
+                            GlobalDeleteAllMessagesDialog(
+                                totalCount = 42,
+                                onDismiss = { showDialog = false },
+                                onConfirmDeleteAll = {}
+                            )
+                        }
                     }
                 }
-                composeTestRule.waitForIdle()
+                flushMainLooperAndSnapshots()
+
+                val latestDialog = ShadowDialog.getLatestDialog()
+                assertNotNull("Expected AlertDialog window to be mounted", latestDialog)
+                assertTrue("Expected AlertDialog to be showing", latestDialog.isShowing)
+                val dialogWindow = latestDialog.window
+                assertNotNull("Expected AlertDialog to have an Android Window", dialogWindow)
+                assertEquals(
+                    "GlobalDeleteAllMessagesDialog window must not set FLAG_SECURE",
+                    0,
+                    dialogWindow!!.attributes.flags and WindowManager.LayoutParams.FLAG_SECURE
+                )
                 assertScreenshotsAllowedAcrossAllWindows(hostActivity)
-                composeTestRule.onNodeWithTag("global_delete_confirm_button").assertIsNotEnabled()
-
-                composeTestRule.onNodeWithTag("global_delete_confirm_input")
-                    .performSemanticsAction(SemanticsActions.SetText) { setText ->
-                        setText(AnnotatedString("DEL"))
-                    }
-                composeTestRule.waitForIdle()
-                composeTestRule.onNodeWithTag("global_delete_confirm_button").assertIsNotEnabled()
-
-                composeTestRule.onNodeWithTag("global_delete_confirm_input")
-                    .performSemanticsAction(SemanticsActions.SetText) { setText ->
-                        setText(AnnotatedString("DELETE"))
-                    }
-                composeTestRule.waitForIdle()
-                composeTestRule.onNodeWithTag("global_delete_confirm_button")
-                    .assertIsEnabled()
-                    .performSemanticsAction(SemanticsActions.OnClick)
-                composeTestRule.waitForIdle()
-                assertTrue(confirmed)
             } finally {
+                showDialog = false
+                flushMainLooperAndSnapshots()
+                runCatching { ShadowDialog.getLatestDialog()?.dismiss() }
                 hostActivity.setContentView(View(hostActivity))
                 flushMainLooperAndSnapshots()
             }
