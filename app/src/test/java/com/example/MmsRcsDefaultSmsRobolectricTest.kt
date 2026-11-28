@@ -179,6 +179,7 @@ class MmsRcsDefaultSmsRobolectricTest {
             ShadowRoleManager.reset()
             ShadowBiometricManager.reset()
             ShadowDialog.reset()
+            resetFileProviderCache()
             val keyguard = context.getSystemService(KeyguardManager::class.java)
             Shadows.shadowOf(keyguard).setIsDeviceSecure(false)
             context.getSystemService(NotificationManager::class.java).cancelAll()
@@ -204,6 +205,7 @@ class MmsRcsDefaultSmsRobolectricTest {
             ShadowDialog.reset()
             ShadowRoleManager.reset()
             ShadowBiometricManager.reset()
+            resetFileProviderCache()
             val keyguard = context.getSystemService(KeyguardManager::class.java)
             Shadows.shadowOf(keyguard).setIsDeviceSecure(false)
             context.getSystemService(NotificationManager::class.java).cancelAll()
@@ -1426,6 +1428,20 @@ class MmsRcsDefaultSmsRobolectricTest {
 
     @Suppress("DEPRECATION")
     private fun resolveTestSmsManager(): SmsManager = SmsManager.getDefault()
+
+    private fun resetFileProviderCache() {
+        runCatching {
+            val field = androidx.core.content.FileProvider::class.java.getDeclaredField("sCache").apply {
+                isAccessible = true
+            }
+            val cache = field.get(null) as? MutableMap<*, *>
+            if (cache != null) {
+                synchronized(cache) {
+                    cache.clear()
+                }
+            }
+        }
+    }
 
     private fun grantDefaultSmsRole() {
         ShadowRoleManager.addRoleHolder(
