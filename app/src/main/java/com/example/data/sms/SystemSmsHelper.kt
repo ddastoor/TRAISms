@@ -672,7 +672,7 @@ class SystemSmsHelper(private val context: Context) {
         toAddresses: List<String>,
         subject: String?,
         body: String,
-        parts: List<MmsPduCodec.MmsPart> = emptyList(),
+        parts: List<MmsPart> = emptyList(),
         timestampMillis: Long,
         isIncoming: Boolean,
         isRead: Boolean,

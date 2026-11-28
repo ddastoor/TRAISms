@@ -607,7 +607,7 @@ class SmsRepository(
         val orderedParts = MmsPduCodec.extractSmilOrderedParts(parsed.parts)
         val textSegments = mutableListOf<String>()
         val attachmentEntities = mutableListOf<MmsAttachmentEntity>()
-        val persistedParts = mutableListOf<MmsPduCodec.MmsPart>()
+        val persistedParts = mutableListOf<MmsPart>()
 
         orderedParts.forEachIndexed { index, part ->
             if (part.contentType.equals("text/plain", ignoreCase = true)) {
@@ -892,10 +892,10 @@ class SmsRepository(
         }
         val replyToSnippet = quotedTarget?.body?.trim()?.take(100)
 
-        val pduParts = mutableListOf<MmsPduCodec.MmsPart>()
+        val pduParts = mutableListOf<MmsPart>()
         if (trimmedBody.isNotEmpty()) {
             pduParts.add(
-                MmsPduCodec.MmsPart(
+                MmsPart(
                     contentType = "text/plain",
                     contentId = "<text_0>",
                     contentLocation = "text_0.txt",
@@ -921,7 +921,7 @@ class SmsRepository(
 
             val cid = "<part_$idx>"
             pduParts.add(
-                MmsPduCodec.MmsPart(
+                MmsPart(
                     contentType = att.contentType,
                     contentId = cid,
                     contentLocation = att.fileName,
@@ -1063,10 +1063,10 @@ class SmsRepository(
             val recipients = decodeRecipientsList(msg.groupRecipientsJson)
                 .ifEmpty { listOf(msg.rawAddress) }
             val attachments = smsDao.getAttachmentsForMessage(messageId)
-            val pduParts = mutableListOf<MmsPduCodec.MmsPart>()
+            val pduParts = mutableListOf<MmsPart>()
             if (msg.body.isNotBlank()) {
                 pduParts.add(
-                    MmsPduCodec.MmsPart(
+                    MmsPart(
                         contentType = "text/plain",
                         contentId = "<text_0>",
                         contentLocation = "text_0.txt",
@@ -1080,7 +1080,7 @@ class SmsRepository(
                     ?: att.textContent?.toByteArray(Charsets.UTF_8)
                     ?: ByteArray(0)
                 pduParts.add(
-                    MmsPduCodec.MmsPart(
+                    MmsPart(
                         contentType = att.contentType,
                         contentId = att.contentId ?: "<part_$idx>",
                         contentLocation = att.fileName ?: "part_$idx",
@@ -1151,7 +1151,7 @@ class SmsRepository(
                         deliveryReport = false,
                         readReport = false,
                         parts = listOf(
-                            MmsPduCodec.MmsPart(
+                            MmsPart(
                                 contentType = "text/plain",
                                 contentId = "<text_0>",
                                 contentLocation = "text_0.txt",
