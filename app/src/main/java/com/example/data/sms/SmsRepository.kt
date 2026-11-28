@@ -314,6 +314,31 @@ class SmsRepository(
                     }
                 }
 
+                if (runningImported > 0) {
+                    val nonHidden = smsDao.getAllMessagesSnapshot().filter { !it.isHiddenReaction }
+                    for (msg in nonHidden) {
+                        val parsedReaction = RcsInteropCodec.parseReactionFallback(msg.body) ?: continue
+                        val folded = tryFoldReactionIntoThread(
+                            threadKey = msg.threadKey,
+                            senderAddress = msg.rawAddress,
+                            senderDisplay = if (msg.isIncoming) (msg.contactName ?: msg.rawAddress) else "You",
+                            isFromSelf = !msg.isIncoming,
+                            timestampMillis = msg.timestampMillis,
+                            parsed = parsedReaction,
+                            excludeMessageId = msg.id
+                        )
+                        if (folded) {
+                            smsDao.updateMessage(
+                                msg.copy(
+                                    isRead = true,
+                                    isHiddenReaction = true,
+                                    transportType = if (settings.rcsChatsEnabled) "RCS" else msg.transportType
+                                )
+                            )
+                        }
+                    }
+                }
+
                 settingsStore.updateSettings { it.copy(initialSyncCompleted = true) }
             } finally {
                 _syncProgress.value = SyncProgressState(isSyncing = false, importedCount = 0)
@@ -1179,9 +1204,11 @@ class SmsRepository(
         senderDisplay: String,
         isFromSelf: Boolean,
         timestampMillis: Long,
-        parsed: ParsedReactionFallback
+        parsed: ParsedReactionFallback,
+        excludeMessageId: Long = -1L
     ): Boolean {
         val candidates = smsDao.getMessagesInThreadSnapshot(threadKey)
+            .filter { it.id != excludeMessageId && RcsInteropCodec.parseReactionFallback(it.body) == null }
         if (candidates.isEmpty()) return false
 
         val quoted = parsed.quotedText?.trim()?.lowercase(Locale.ROOT)

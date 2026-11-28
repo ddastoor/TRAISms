@@ -967,7 +967,8 @@ class MmsRcsDefaultSmsRobolectricTest {
                 // Long-press preserves strictly Copy & Forward prompt contract
                 composeTestRule.onNodeWithTag("thread_messages_list").performScrollToIndex(2)
                 composeTestRule.waitForIdle()
-                composeTestRule.onNodeWithTag("thread_message_bubble_13").performTouchInput { longClick() }
+                composeTestRule.onNodeWithTag("thread_message_bubble_13")
+                    .performSemanticsAction(SemanticsActions.OnLongClick)
                 composeTestRule.waitUntil(timeoutMillis = 5_000) {
                     composeTestRule.onAllNodesWithTag("message_actions_prompt").fetchSemanticsNodes().isNotEmpty()
                 }
@@ -1080,8 +1081,10 @@ class MmsRcsDefaultSmsRobolectricTest {
                 // Switch to ThreadRowItem, then SettingsScreen RCS/MMS card toggles
                 composeTestRule.runOnIdle { mode = "ROW" }
                 composeTestRule.waitForIdle()
-                composeTestRule.onNodeWithTag("thread_transport_badge_RCS_THREAD").assertIsDisplayed()
-                composeTestRule.onNodeWithTag("thread_attachment_icon_RCS_THREAD").assertIsDisplayed()
+                composeTestRule.onNodeWithTag("thread_transport_badge_RCS_THREAD", useUnmergedTree = true)
+                    .assertIsDisplayed()
+                composeTestRule.onNodeWithTag("thread_attachment_icon_RCS_THREAD", useUnmergedTree = true)
+                    .assertIsDisplayed()
 
                 composeTestRule.runOnIdle { mode = "SETTINGS" }
                 composeTestRule.waitForIdle()
