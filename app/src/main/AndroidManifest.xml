@@ -81,6 +81,22 @@
             </intent-filter>
         </receiver>
 
+        <!-- Internal FileProvider for OS-brokered MMS PDU staging (non-exported) -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.mmsfileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/mms_file_paths" />
+        </provider>
+
+        <!-- Internal BroadcastReceiver for SMS/MMS sent, delivery & download callbacks -->
+        <receiver
+            android:name=".data.sms.SmsMmsStatusReceiver"
+            android:exported="false" />
+
         <!-- Default SMS Quick-Response Headless Send Service -->
         <service
             android:name=".data.sms.HeadlessSmsSendService"

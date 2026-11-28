@@ -4,11 +4,15 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -32,11 +36,17 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.Reply
 import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.outlined.AddCircleOutline
+import androidx.compose.material.icons.outlined.AddReaction
 import androidx.compose.material.icons.outlined.Archive
+import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.DeleteOutline
+import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.DriveFileMove
+import androidx.compose.material.icons.outlined.Subject
 import androidx.compose.material.icons.outlined.Unarchive
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -48,6 +58,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
@@ -62,6 +73,7 @@ import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -70,6 +82,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.testTag
@@ -79,8 +92,13 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.R
 import com.example.data.crypto.SmsFontSize
+import com.example.data.db.MmsAttachmentEntity
 import com.example.data.db.SmsCategory
 import com.example.data.db.SmsMessageEntity
+import com.example.data.sms.ContactLookupCache
+import com.example.data.sms.PendingMmsAttachment
+import com.example.data.sms.RcsInteropCodec
+import com.example.data.sms.SystemSmsHelper
 import com.example.domain.classifier.PhoneAndSenderNormalizer
 import com.example.domain.classifier.SenderAddressType
 import com.example.ui.common.CategoryBadgePill
@@ -91,7 +109,12 @@ import com.example.ui.theme.CategoryOtpFg
 import com.example.ui.theme.JetBrainsMonoFamily
 import com.example.ui.theme.LocalSmsTextPreferences
 import com.example.ui.theme.smsMessageBodyStyle
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import kotlinx.serialization.builtins.ListSerializer
+import kotlinx.serialization.builtins.serializer
+import kotlinx.serialization.json.Json
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
@@ -104,7 +127,16 @@ fun ThreadDetailScreen(
     onDeleteSingleMessage: (Long) -> Unit,
     onToggleArchive: (String, Boolean) -> Unit,
     onAssignCategory: (threadKey: String, senderTitle: String, target: SmsCategory, alwaysRule: Boolean) -> Unit,
-    onForwardMessage: (String) -> Unit = {}
+    onForwardMessage: (String) -> Unit = {},
+    attachmentsByMessageId: Map<Long, List<MmsAttachmentEntity>> = emptyMap(),
+    rcsChatsEnabled: Boolean = true,
+    contactCache: ContactLookupCache? = null,
+    systemSmsHelper: SystemSmsHelper? = null,
+    onSendReplyWithQuote: ((destinationAddress: String, text: String, replyToMessageId: Long?, onResult: (Result<String>) -> Unit) -> Unit)? = null,
+    onSendMmsReply: ((recipients: List<String>, text: String, subject: String?, attachments: List<PendingMmsAttachment>, replyToMessageId: Long?, onResult: (Result<String>) -> Unit) -> Unit)? = null,
+    onToggleReaction: (Long, String) -> Unit = { _, _ -> },
+    onDownloadMms: (Long) -> Unit = {},
+    onRetryMessage: (Long) -> Unit = {}
 ) {
     BackHandler(onBack = onBack)
 
@@ -116,17 +148,76 @@ fun ThreadDetailScreen(
     val listState = rememberLazyListState()
 
     var replyText by remember { mutableStateOf("") }
+    var mmsSubject by remember { mutableStateOf("") }
+    var showSubjectInput by remember { mutableStateOf(false) }
+    var replyTarget by remember { mutableStateOf<SmsMessageEntity?>(null) }
+    var activeEmojiBarMessageId by remember { mutableStateOf<Long?>(null) }
     var actionMenuMessage by remember { mutableStateOf<SmsMessageEntity?>(null) }
     var deleteCandidate by remember { mutableStateOf<SmsMessageEntity?>(null) }
     var showMoveSheet by remember { mutableStateOf(false) }
+    var showAttachmentSheet by remember { mutableStateOf(false) }
+    var showContactVCardDialog by remember { mutableStateOf(false) }
+    var showLocationDialog by remember { mutableStateOf(false) }
+    val pendingAttachments = remember { mutableStateListOf<PendingMmsAttachment>() }
+
+    val mediaPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickMultipleVisualMedia(5)
+    ) { uris ->
+        if (uris.isEmpty() || systemSmsHelper == null) return@rememberLauncherForActivityResult
+        scope.launch {
+            val staged = withContext(Dispatchers.IO) {
+                uris.mapNotNull { uri ->
+                    systemSmsHelper.stageLocalAttachmentFromUri(
+                        sourceUri = uri,
+                        fallbackMime = "image/jpeg",
+                        fallbackName = "media_${System.currentTimeMillis()}"
+                    ).getOrNull()
+                }
+            }
+            pendingAttachments.addAll(staged)
+        }
+    }
+
+    val filePickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri == null || systemSmsHelper == null) return@rememberLauncherForActivityResult
+        scope.launch {
+            val staged = withContext(Dispatchers.IO) {
+                systemSmsHelper.stageLocalAttachmentFromUri(
+                    sourceUri = uri,
+                    fallbackMime = "application/octet-stream",
+                    fallbackName = "attachment_${System.currentTimeMillis()}"
+                ).getOrNull()
+            }
+            if (staged != null) {
+                pendingAttachments.add(staged)
+            }
+        }
+    }
 
     val latestMessage = messages.lastOrNull()
+    val groupRecipients = remember(messages) {
+        val rawJson = messages.lastOrNull { !it.groupRecipientsJson.isNullOrBlank() }?.groupRecipientsJson
+        if (rawJson.isNullOrBlank()) {
+            emptyList()
+        } else {
+            runCatching {
+                Json.decodeFromString(ListSerializer(String.serializer()), rawJson)
+            }.getOrDefault(emptyList())
+        }
+    }
     val rawAddress = latestMessage?.rawAddress ?: threadKey
-    val senderTitle = latestMessage?.contactName ?: rawAddress
+    val senderTitle = if (groupRecipients.size > 1) {
+        latestMessage?.contactName ?: groupRecipients.joinToString(", ")
+    } else {
+        latestMessage?.contactName ?: rawAddress
+    }
     val currentCategory = latestMessage?.category ?: SmsCategory.PERSONAL
     val isArchived = latestMessage?.isArchived == true
-    val canReply = remember(rawAddress) {
-        PhoneAndSenderNormalizer.classifySenderType(rawAddress) != SenderAddressType.ALPHANUMERIC_HEADER
+    val canReply = remember(rawAddress, groupRecipients) {
+        groupRecipients.size > 1 ||
+            PhoneAndSenderNormalizer.classifySenderType(rawAddress) != SenderAddressType.ALPHANUMERIC_HEADER
     }
 
     LaunchedEffect(threadKey, messages.size) {
@@ -170,7 +261,14 @@ fun ThreadDetailScreen(
                                 horizontalArrangement = Arrangement.spacedBy(6.dp)
                             ) {
                                 CategoryBadgePill(category = currentCategory)
-                                if (latestMessage?.contactName != null) {
+                                if (groupRecipients.size > 1) {
+                                    Text(
+                                        text = "${groupRecipients.size} participants",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.testTag("thread_group_participants_label")
+                                    )
+                                } else if (latestMessage?.contactName != null) {
                                     Text(
                                         text = rawAddress,
                                         style = MaterialTheme.typography.labelSmall,
@@ -220,58 +318,188 @@ fun ThreadDetailScreen(
                     .imePadding()
             ) {
                 if (canReply) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
+                    Column(
                         modifier = Modifier
                             .fillMaxWidth()
                             .navigationBarsPadding()
-                            .padding(horizontal = 12.dp, vertical = 10.dp)
                     ) {
-                        OutlinedTextField(
-                            value = replyText,
-                            onValueChange = { replyText = it },
-                            textStyle = smsMessageBodyStyle(
-                                MaterialTheme.typography.bodyLarge,
-                                smsTextPrefs.fontSize,
-                                smsTextPrefs.bold
-                            ),
-                            placeholder = { Text(stringResource(R.string.reply_placeholder)) },
-                            maxLines = 4,
-                            shape = RoundedCornerShape(20.dp),
-                            modifier = Modifier
-                                .weight(1f)
-                                .testTag("thread_reply_input")
+                        replyTarget?.let { target ->
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+                                    .padding(horizontal = 14.dp, vertical = 8.dp)
+                                    .testTag("reply_context_banner")
+                            ) {
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Filled.Reply,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = "Replying to ${if (target.isIncoming) (target.contactName ?: target.rawAddress) else "You"}",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.primary
+                                    )
+                                    Text(
+                                        text = target.body,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                                IconButton(
+                                    onClick = { replyTarget = null },
+                                    modifier = Modifier
+                                        .size(28.dp)
+                                        .testTag("cancel_reply_button")
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Outlined.Close,
+                                        contentDescription = "Cancel reply",
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                }
+                            }
+                        }
+
+                        PendingAttachmentsStrip(
+                            attachments = pendingAttachments,
+                            onRemoveAt = { idx -> pendingAttachments.removeAt(idx) },
+                            modifier = Modifier.testTag("thread_pending_attachments_strip")
                         )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        IconButton(
-                            onClick = {
-                                val outgoing = replyText.trim()
-                                if (outgoing.isNotEmpty()) {
+
+                        if (showSubjectInput) {
+                            OutlinedTextField(
+                                value = mmsSubject,
+                                onValueChange = { mmsSubject = it },
+                                singleLine = true,
+                                label = { Text(stringResource(R.string.mms_subject_label)) },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 12.dp, vertical = 4.dp)
+                                    .testTag("thread_mms_subject_input")
+                            )
+                        }
+
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 8.dp, vertical = 8.dp)
+                        ) {
+                            IconButton(
+                                onClick = { showAttachmentSheet = true },
+                                modifier = Modifier
+                                    .size(40.dp)
+                                    .testTag("thread_attach_button")
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Outlined.AddCircleOutline,
+                                    contentDescription = "Attach media or file",
+                                    tint = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                            IconButton(
+                                onClick = { showSubjectInput = !showSubjectInput },
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .testTag("thread_toggle_subject_button")
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Outlined.Subject,
+                                    contentDescription = "Toggle MMS subject",
+                                    tint = if (showSubjectInput) MaterialTheme.colorScheme.primary
+                                    else MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            OutlinedTextField(
+                                value = replyText,
+                                onValueChange = { replyText = it },
+                                textStyle = smsMessageBodyStyle(
+                                    MaterialTheme.typography.bodyLarge,
+                                    smsTextPrefs.fontSize,
+                                    smsTextPrefs.bold
+                                ),
+                                placeholder = { Text(stringResource(R.string.reply_placeholder)) },
+                                maxLines = 4,
+                                shape = RoundedCornerShape(20.dp),
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .testTag("thread_reply_input")
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            val canSend = replyText.isNotBlank() ||
+                                pendingAttachments.isNotEmpty() ||
+                                mmsSubject.isNotBlank()
+                            IconButton(
+                                onClick = {
+                                    val outgoing = replyText.trim()
+                                    val subject = mmsSubject.trim().takeIf { it.isNotEmpty() }
+                                    val quoteId = replyTarget?.id
+                                    val stagedAtts = pendingAttachments.toList()
+                                    val targetRecipients = if (groupRecipients.size > 1) {
+                                        groupRecipients
+                                    } else {
+                                        listOf(rawAddress)
+                                    }
+                                    val isMmsSend = stagedAtts.isNotEmpty() ||
+                                        subject != null ||
+                                        targetRecipients.size > 1
+
+                                    if (!canSend) return@IconButton
+
                                     replyText = ""
-                                    onSendReply(rawAddress, outgoing) { res ->
+                                    mmsSubject = ""
+                                    showSubjectInput = false
+                                    replyTarget = null
+                                    pendingAttachments.clear()
+
+                                    val onSendComplete: (Result<String>) -> Unit = { res ->
                                         if (res.isFailure) {
                                             scope.launch {
                                                 snackbarHostState.showSnackbar(
-                                                    res.exceptionOrNull()?.message ?: "Unable to send SMS"
+                                                    res.exceptionOrNull()?.message ?: "Unable to send message"
                                                 )
                                             }
                                         }
                                     }
-                                }
-                            },
-                            enabled = replyText.isNotBlank(),
-                            colors = IconButtonDefaults.filledIconButtonColors(
-                                containerColor = MaterialTheme.colorScheme.primary,
-                                contentColor = MaterialTheme.colorScheme.onPrimary
-                            ),
-                            modifier = Modifier
-                                .size(48.dp)
-                                .testTag("thread_send_button")
-                        ) {
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Filled.Send,
-                                contentDescription = stringResource(R.string.send_sms_cd)
-                            )
+
+                                    if (isMmsSend && onSendMmsReply != null) {
+                                        onSendMmsReply(
+                                            targetRecipients,
+                                            outgoing,
+                                            subject,
+                                            stagedAtts,
+                                            quoteId,
+                                            onSendComplete
+                                        )
+                                    } else if (quoteId != null && onSendReplyWithQuote != null) {
+                                        onSendReplyWithQuote(rawAddress, outgoing, quoteId, onSendComplete)
+                                    } else {
+                                        onSendReply(rawAddress, outgoing, onSendComplete)
+                                    }
+                                },
+                                enabled = canSend,
+                                colors = IconButtonDefaults.filledIconButtonColors(
+                                    containerColor = MaterialTheme.colorScheme.primary,
+                                    contentColor = MaterialTheme.colorScheme.onPrimary
+                                ),
+                                modifier = Modifier
+                                    .size(48.dp)
+                                    .testTag("thread_send_button")
+                            ) {
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Filled.Send,
+                                    contentDescription = stringResource(R.string.send_sms_cd)
+                                )
+                            }
                         }
                     }
                 } else {
@@ -308,6 +536,10 @@ fun ThreadDetailScreen(
                 key = { it.id }
             ) { msg ->
                 val isIncoming = msg.isIncoming
+                val attachments = attachmentsByMessageId[msg.id].orEmpty()
+                val reactions = remember(msg.reactionsJson) {
+                    RcsInteropCodec.decodeReactions(msg.reactionsJson)
+                }
                 val bubbleShape = RoundedCornerShape(
                     topStart = 16.dp,
                     topEnd = 16.dp,
@@ -316,7 +548,24 @@ fun ThreadDetailScreen(
                 )
                 Column(
                     horizontalAlignment = if (isIncoming) Alignment.Start else Alignment.End,
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .pointerInput(msg.id, canReply) {
+                            if (!canReply) return@pointerInput
+                            var totalDrag = 0f
+                            detectHorizontalDragGestures(
+                                onDragStart = { totalDrag = 0f },
+                                onDragEnd = {
+                                    if (kotlin.math.abs(totalDrag) > 56f) {
+                                        replyTarget = msg
+                                    }
+                                    totalDrag = 0f
+                                },
+                                onHorizontalDrag = { _, dragAmount ->
+                                    totalDrag += dragAmount
+                                }
+                            )
+                        }
                 ) {
                     Surface(
                         color = if (isIncoming) MaterialTheme.colorScheme.surfaceContainer
@@ -337,6 +586,72 @@ fun ThreadDetailScreen(
                             .testTag("thread_message_bubble_${msg.id}")
                     ) {
                         Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
+                            QuotedReplyPreviewCard(
+                                messageId = msg.id,
+                                sender = msg.replyToSender,
+                                snippet = msg.replyToSnippet,
+                                isIncoming = isIncoming,
+                                onClick = {
+                                    val targetIdx = messages.indexOfFirst { it.id == msg.replyToMessageId }
+                                    if (targetIdx >= 0) {
+                                        scope.launch { listState.animateScrollToItem(targetIdx) }
+                                    }
+                                }
+                            )
+
+                            msg.mmsSubject?.takeIf { it.isNotBlank() }?.let { subj ->
+                                Text(
+                                    text = "Subject: $subj",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier
+                                        .padding(bottom = 4.dp)
+                                        .testTag("mms_subject_header_${msg.id}")
+                                )
+                            }
+
+                            if (msg.deliveryStatus == "PENDING_DOWNLOAD") {
+                                Surface(
+                                    color = MaterialTheme.colorScheme.surface,
+                                    shape = RoundedCornerShape(10.dp),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(bottom = 6.dp)
+                                        .testTag("mms_download_card_${msg.id}")
+                                ) {
+                                    Column(
+                                        verticalArrangement = Arrangement.spacedBy(6.dp),
+                                        modifier = Modifier.padding(10.dp)
+                                    ) {
+                                        Text(
+                                            text = stringResource(R.string.mms_offline_notice),
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                        OutlinedButton(
+                                            onClick = { onDownloadMms(msg.id) },
+                                            modifier = Modifier.testTag("download_mms_button_${msg.id}")
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Outlined.Download,
+                                                contentDescription = null,
+                                                modifier = Modifier.size(16.dp)
+                                            )
+                                            Spacer(modifier = Modifier.width(6.dp))
+                                            Text(stringResource(R.string.mms_download_cta))
+                                        }
+                                    }
+                                }
+                            }
+
+                            attachments.forEach { att ->
+                                MmsAttachmentBubbleContent(
+                                    attachment = att,
+                                    isIncoming = isIncoming,
+                                    systemSmsHelper = systemSmsHelper
+                                )
+                            }
+
                             Text(
                                 text = msg.body,
                                 style = smsMessageBodyStyle(
@@ -398,9 +713,27 @@ fun ThreadDetailScreen(
                         }
                     }
 
+                    if (reactions.isNotEmpty()) {
+                        ReactionPillsRow(
+                            messageId = msg.id,
+                            reactions = reactions,
+                            onToggleReaction = { emoji -> onToggleReaction(msg.id, emoji) }
+                        )
+                    }
+
+                    if (activeEmojiBarMessageId == msg.id && rcsChatsEnabled) {
+                        QuickEmojiReactionBar(
+                            messageId = msg.id,
+                            onSelectEmoji = { emoji ->
+                                activeEmojiBarMessageId = null
+                                onToggleReaction(msg.id, emoji)
+                            }
+                        )
+                    }
+
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
                         modifier = Modifier.padding(top = 4.dp, start = 4.dp, end = 4.dp)
                     ) {
                         Text(
@@ -408,6 +741,46 @@ fun ThreadDetailScreen(
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
+                        if (!isIncoming && msg.deliveryStatus != "NONE") {
+                            DeliveryStatusIndicator(
+                                messageId = msg.id,
+                                deliveryStatus = msg.deliveryStatus,
+                                onRetry = { onRetryMessage(msg.id) }
+                            )
+                        }
+                        if (canReply) {
+                            IconButton(
+                                onClick = { replyTarget = msg },
+                                modifier = Modifier
+                                    .size(28.dp)
+                                    .testTag("reply_msg_button_${msg.id}")
+                            ) {
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Filled.Reply,
+                                    contentDescription = "Reply to message",
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.size(15.dp)
+                                )
+                            }
+                        }
+                        if (rcsChatsEnabled) {
+                            IconButton(
+                                onClick = {
+                                    activeEmojiBarMessageId =
+                                        if (activeEmojiBarMessageId == msg.id) null else msg.id
+                                },
+                                modifier = Modifier
+                                    .size(28.dp)
+                                    .testTag("react_msg_button_${msg.id}")
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Outlined.AddReaction,
+                                    contentDescription = "React to message",
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.size(15.dp)
+                                )
+                            }
+                        }
                         IconButton(
                             onClick = { deleteCandidate = msg },
                             modifier = Modifier
@@ -597,6 +970,58 @@ fun ThreadDetailScreen(
                 scope.launch {
                     snackbarHostState.showSnackbar("Moved $senderTitle to ${targetCat.title}")
                 }
+            }
+        )
+    }
+
+    if (showAttachmentSheet) {
+        AttachmentPickerBottomSheet(
+            onDismiss = { showAttachmentSheet = false },
+            onPickMedia = {
+                mediaPickerLauncher.launch(
+                    PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo)
+                )
+            },
+            onPickFile = { filePickerLauncher.launch(arrayOf("*/*")) },
+            onPickContact = { showContactVCardDialog = true },
+            onPickLocation = { showLocationDialog = true }
+        )
+    }
+
+    if (showContactVCardDialog) {
+        ContactVCardPickerDialog(
+            contactCache = contactCache,
+            onDismiss = { showContactVCardDialog = false },
+            onSelectContact = { selected ->
+                showContactVCardDialog = false
+                val vCard = RcsInteropCodec.buildVCardContent(selected.displayName, selected.phoneNumber)
+                val safeFile = "${selected.displayName.replace(Regex("[^A-Za-z0-9]"), "_")}.vcf"
+                val staged = systemSmsHelper?.stageTextAttachment("text/x-vcard", safeFile, vCard)?.getOrNull()
+                    ?: PendingMmsAttachment(
+                        contentType = "text/x-vcard",
+                        fileName = safeFile,
+                        sizeBytes = vCard.length.toLong(),
+                        textContent = vCard
+                    )
+                pendingAttachments.add(staged)
+            }
+        )
+    }
+
+    if (showLocationDialog) {
+        OfflineLocationTextDialog(
+            onDismiss = { showLocationDialog = false },
+            onConfirmLocation = { note ->
+                showLocationDialog = false
+                val content = "Location: $note"
+                val staged = systemSmsHelper?.stageTextAttachment("text/plain", "location.txt", content)?.getOrNull()
+                    ?: PendingMmsAttachment(
+                        contentType = "text/plain",
+                        fileName = "location.txt",
+                        sizeBytes = content.length.toLong(),
+                        textContent = content
+                    )
+                pendingAttachments.add(staged)
             }
         )
     }

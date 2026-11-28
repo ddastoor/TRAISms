@@ -4,6 +4,7 @@ import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.Transaction
 import androidx.room.Update
 import kotlinx.coroutines.flow.Flow
 
@@ -24,7 +25,12 @@ interface SmsDao {
             m.isArchived AS isArchived,
             agg.unreadCount AS unreadCount,
             agg.messageCount AS messageCount,
-            m.classificationSource AS classificationSource
+            m.classificationSource AS classificationSource,
+            m.transportType AS transportType,
+            m.deliveryStatus AS deliveryStatus,
+            EXISTS(SELECT 1 FROM mms_attachments att WHERE att.messageId = m.id) AS hasAttachments,
+            m.mmsSubject AS mmsSubject,
+            m.groupRecipientsJson AS groupRecipientsJson
         FROM sms_messages m
         INNER JOIN (
             SELECT 
@@ -33,10 +39,10 @@ interface SmsDao {
                 SUM(CASE WHEN isRead = 0 AND isIncoming = 1 THEN 1 ELSE 0 END) AS unreadCount,
                 COUNT(*) AS messageCount
             FROM sms_messages
-            WHERE isArchived = 0 AND category = :category
+            WHERE isArchived = 0 AND category = :category AND isHiddenReaction = 0
             GROUP BY threadKey
         ) agg ON m.threadKey = agg.threadKey AND (m.timestampMillis * 1000000 + m.id) = agg.maxSortKey
-        WHERE m.isArchived = 0 AND m.category = :category
+        WHERE m.isArchived = 0 AND m.category = :category AND m.isHiddenReaction = 0
         ORDER BY m.timestampMillis DESC, m.id DESC
         """
     )
@@ -56,19 +62,24 @@ interface SmsDao {
             m.isArchived AS isArchived,
             agg.unreadCount AS unreadCount,
             agg.messageCount AS messageCount,
-            m.classificationSource AS classificationSource
+            m.classificationSource AS classificationSource,
+            m.transportType AS transportType,
+            m.deliveryStatus AS deliveryStatus,
+            EXISTS(SELECT 1 FROM mms_attachments att WHERE att.messageId = m.id) AS hasAttachments,
+            m.mmsSubject AS mmsSubject,
+            m.groupRecipientsJson AS groupRecipientsJson
         FROM sms_messages m
         INNER JOIN (
             SELECT 
                 threadKey,
                 MAX(timestampMillis * 1000000 + id) AS maxSortKey,
                 COUNT(*) AS unreadCount,
-                (SELECT COUNT(*) FROM sms_messages all_m WHERE all_m.threadKey = sms_messages.threadKey AND all_m.isArchived = 0 AND all_m.category = :category) AS messageCount
+                (SELECT COUNT(*) FROM sms_messages all_m WHERE all_m.threadKey = sms_messages.threadKey AND all_m.isArchived = 0 AND all_m.category = :category AND all_m.isHiddenReaction = 0) AS messageCount
             FROM sms_messages
-            WHERE isArchived = 0 AND category = :category AND isRead = 0 AND isIncoming = 1
+            WHERE isArchived = 0 AND category = :category AND isRead = 0 AND isIncoming = 1 AND isHiddenReaction = 0
             GROUP BY threadKey
         ) agg ON m.threadKey = agg.threadKey AND (m.timestampMillis * 1000000 + m.id) = agg.maxSortKey
-        WHERE m.isArchived = 0 AND m.category = :category AND m.isRead = 0 AND isIncoming = 1
+        WHERE m.isArchived = 0 AND m.category = :category AND m.isRead = 0 AND m.isIncoming = 1 AND m.isHiddenReaction = 0
         ORDER BY m.timestampMillis DESC, m.id DESC
         """
     )
@@ -88,7 +99,12 @@ interface SmsDao {
             m.isArchived AS isArchived,
             agg.unreadCount AS unreadCount,
             agg.messageCount AS messageCount,
-            m.classificationSource AS classificationSource
+            m.classificationSource AS classificationSource,
+            m.transportType AS transportType,
+            m.deliveryStatus AS deliveryStatus,
+            EXISTS(SELECT 1 FROM mms_attachments att WHERE att.messageId = m.id) AS hasAttachments,
+            m.mmsSubject AS mmsSubject,
+            m.groupRecipientsJson AS groupRecipientsJson
         FROM sms_messages m
         INNER JOIN (
             SELECT 
@@ -97,14 +113,16 @@ interface SmsDao {
                 SUM(CASE WHEN isRead = 0 AND isIncoming = 1 THEN 1 ELSE 0 END) AS unreadCount,
                 COUNT(*) AS messageCount
             FROM sms_messages
-            WHERE isArchived = 0 AND (
+            WHERE isArchived = 0 AND isHiddenReaction = 0 AND (
                 rawAddress LIKE '%' || :query || '%' OR
-                 IFNULL(contactName, '') LIKE '%' || :query || '%' OR
+                IFNULL(contactName, '') LIKE '%' || :query || '%' OR
                 body LIKE '%' || :query || '%' OR
+                IFNULL(mmsSubject, '') LIKE '%' || :query || '%' OR
                 IFNULL(extractedOtp, '') LIKE '%' || :query || '%'
             )
             GROUP BY threadKey
         ) agg ON m.threadKey = agg.threadKey AND (m.timestampMillis * 1000000 + m.id) = agg.maxSortKey
+        WHERE m.isHiddenReaction = 0
         ORDER BY m.timestampMillis DESC, m.id DESC
         """
     )
@@ -124,7 +142,12 @@ interface SmsDao {
             m.isArchived AS isArchived,
             agg.unreadCount AS unreadCount,
             agg.messageCount AS messageCount,
-            m.classificationSource AS classificationSource
+            m.classificationSource AS classificationSource,
+            m.transportType AS transportType,
+            m.deliveryStatus AS deliveryStatus,
+            EXISTS(SELECT 1 FROM mms_attachments att WHERE att.messageId = m.id) AS hasAttachments,
+            m.mmsSubject AS mmsSubject,
+            m.groupRecipientsJson AS groupRecipientsJson
         FROM sms_messages m
         INNER JOIN (
             SELECT 
@@ -133,10 +156,10 @@ interface SmsDao {
                 SUM(CASE WHEN isRead = 0 AND isIncoming = 1 THEN 1 ELSE 0 END) AS unreadCount,
                 COUNT(*) AS messageCount
             FROM sms_messages
-            WHERE isArchived = 1
+            WHERE isArchived = 1 AND isHiddenReaction = 0
             GROUP BY threadKey
         ) agg ON m.threadKey = agg.threadKey AND (m.timestampMillis * 1000000 + m.id) = agg.maxSortKey
-        WHERE m.isArchived = 1
+        WHERE m.isArchived = 1 AND m.isHiddenReaction = 0
         ORDER BY m.timestampMillis DESC, m.id DESC
         """
     )
@@ -149,29 +172,66 @@ interface SmsDao {
             SUM(CASE WHEN isRead = 0 AND isIncoming = 1 THEN 1 ELSE 0 END) AS unreadCount,
             COUNT(*) AS totalCount
         FROM sms_messages
-        WHERE isArchived = 0
+        WHERE isArchived = 0 AND isHiddenReaction = 0
         GROUP BY category
         """
     )
     fun observeCategoryCounts(): Flow<List<CategoryUnreadCount>>
 
-    @Query("SELECT COUNT(*) FROM sms_messages WHERE isArchived = 1")
+    @Query("SELECT COUNT(*) FROM sms_messages WHERE isArchived = 1 AND isHiddenReaction = 0")
     fun observeArchivedMessageCount(): Flow<Int>
 
-    @Query("SELECT COUNT(*) FROM sms_messages")
+    @Query("SELECT COUNT(*) FROM sms_messages WHERE isHiddenReaction = 0")
     fun observeTotalMessageCount(): Flow<Int>
 
-    @Query("SELECT COUNT(*) FROM sms_messages")
+    @Query("SELECT COUNT(*) FROM sms_messages WHERE isHiddenReaction = 0")
     suspend fun getTotalMessageCount(): Int
 
-    @Query("SELECT * FROM sms_messages WHERE threadKey = :threadKey ORDER BY timestampMillis ASC, id ASC")
+    @Query("SELECT * FROM sms_messages WHERE threadKey = :threadKey AND isHiddenReaction = 0 ORDER BY timestampMillis ASC, id ASC")
     fun observeThreadMessages(threadKey: String): Flow<List<SmsMessageEntity>>
+
+    @Transaction
+    @Query("SELECT * FROM sms_messages WHERE threadKey = :threadKey AND isHiddenReaction = 0 ORDER BY timestampMillis ASC, id ASC")
+    fun observeThreadMessagesWithAttachments(threadKey: String): Flow<List<SmsMessageWithAttachments>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertAttachments(attachments: List<MmsAttachmentEntity>)
+
+    @Query("SELECT * FROM mms_attachments WHERE messageId = :messageId ORDER BY partIndex ASC, id ASC")
+    suspend fun getAttachmentsForMessage(messageId: Long): List<MmsAttachmentEntity>
+
+    @Query("SELECT * FROM sms_messages WHERE id = :id LIMIT 1")
+    suspend fun getMessageById(id: Long): SmsMessageEntity?
+
+    @Query("SELECT * FROM sms_messages WHERE mmsTransactionId = :transactionId LIMIT 1")
+    suspend fun getMessageByTransactionId(transactionId: String): SmsMessageEntity?
+
+    @Query("SELECT * FROM sms_messages WHERE threadKey = :threadKey AND isHiddenReaction = 0 ORDER BY timestampMillis DESC, id DESC")
+    suspend fun getMessagesInThreadSnapshot(threadKey: String): List<SmsMessageEntity>
 
     @Query("SELECT * FROM sms_messages ORDER BY timestampMillis ASC, id ASC")
     suspend fun getAllMessagesSnapshot(): List<SmsMessageEntity>
 
     @Query("SELECT systemSmsId FROM sms_messages WHERE systemSmsId IS NOT NULL")
     suspend fun getImportedSystemSmsIds(): List<Long>
+
+    @Query("SELECT systemMmsId FROM sms_messages WHERE systemMmsId IS NOT NULL")
+    suspend fun getImportedSystemMmsIds(): List<Long>
+
+    @Query("SELECT systemMmsId FROM sms_messages WHERE threadKey = :threadKey AND systemMmsId IS NOT NULL")
+    suspend fun getSystemMmsIdsForThread(threadKey: String): List<Long>
+
+    @Query("SELECT systemMmsId FROM sms_messages WHERE threadKey IN (:threadKeys) AND systemMmsId IS NOT NULL")
+    suspend fun getSystemMmsIdsForThreads(threadKeys: List<String>): List<Long>
+
+    @Query("SELECT systemMmsId FROM sms_messages WHERE category = :category AND isArchived = 0 AND systemMmsId IS NOT NULL")
+    suspend fun getSystemMmsIdsInActiveCategory(category: SmsCategory): List<Long>
+
+    @Query("SELECT systemMmsId FROM sms_messages WHERE id = :id AND systemMmsId IS NOT NULL")
+    suspend fun getSystemMmsIdForMessage(id: Long): Long?
+
+    @Query("SELECT systemMmsId FROM sms_messages WHERE systemMmsId IS NOT NULL")
+    suspend fun getAllSystemMmsIds(): List<Long>
 
     @Query(
         """
@@ -195,7 +255,16 @@ interface SmsDao {
     suspend fun insertMessages(messages: List<SmsMessageEntity>)
 
     @Update
+    suspend fun updateMessage(message: SmsMessageEntity)
+
+    @Update
     suspend fun updateMessages(messages: List<SmsMessageEntity>)
+
+    @Query("UPDATE sms_messages SET deliveryStatus = :status WHERE id = :id")
+    suspend fun updateDeliveryStatus(id: Long, status: String)
+
+    @Query("UPDATE sms_messages SET reactionsJson = :reactionsJson WHERE id = :id")
+    suspend fun updateReactionsJson(id: Long, reactionsJson: String?)
 
     @Query("UPDATE sms_messages SET isRead = 1 WHERE threadKey = :threadKey AND isRead = 0")
     suspend fun markThreadRead(threadKey: String)
@@ -221,6 +290,21 @@ interface SmsDao {
     @Query("SELECT id FROM sms_messages WHERE threadKey = :threadKey ORDER BY timestampMillis DESC, id DESC LIMIT 1")
     suspend fun getLatestMessageIdForThread(threadKey: String): Long?
 
+    @Query("DELETE FROM mms_attachments WHERE messageId = :messageId")
+    suspend fun deleteAttachmentsForMessage(messageId: Long)
+
+    @Query("DELETE FROM mms_attachments WHERE messageId IN (SELECT id FROM sms_messages WHERE threadKey = :threadKey)")
+    suspend fun deleteAttachmentsForThread(threadKey: String)
+
+    @Query("DELETE FROM mms_attachments WHERE messageId IN (SELECT id FROM sms_messages WHERE threadKey IN (:threadKeys))")
+    suspend fun deleteAttachmentsForThreads(threadKeys: List<String>)
+
+    @Query("DELETE FROM mms_attachments WHERE messageId IN (SELECT id FROM sms_messages WHERE category = :category AND isArchived = 0)")
+    suspend fun deleteAttachmentsInActiveCategory(category: SmsCategory)
+
+    @Query("DELETE FROM mms_attachments")
+    suspend fun deleteAllAttachments()
+
     @Query("DELETE FROM sms_messages WHERE id = :id")
     suspend fun deleteMessageById(id: Long)
 
@@ -236,7 +320,7 @@ interface SmsDao {
     @Query("DELETE FROM sms_messages WHERE threadKey IN (:threadKeys)")
     suspend fun deleteThreads(threadKeys: List<String>)
 
-    @Query("SELECT COUNT(*) FROM sms_messages WHERE category = :category AND isArchived = 0")
+    @Query("SELECT COUNT(*) FROM sms_messages WHERE category = :category AND isArchived = 0 AND isHiddenReaction = 0")
     suspend fun countActiveMessagesInCategory(category: SmsCategory): Int
 
     @Query("SELECT systemSmsId FROM sms_messages WHERE category = :category AND isArchived = 0 AND systemSmsId IS NOT NULL")
@@ -255,6 +339,17 @@ interface SmsDao {
         """
     )
     suspend fun getUnreadSystemIdsInActiveCategory(category: SmsCategory): List<Long>
+
+    @Query(
+        """
+        SELECT systemMmsId FROM sms_messages 
+        WHERE category = :category 
+          AND isArchived = 0 
+          AND isRead = 0 
+          AND systemMmsId IS NOT NULL
+        """
+    )
+    suspend fun getUnreadSystemMmsIdsInActiveCategory(category: SmsCategory): List<Long>
 
     @Query(
         """

@@ -1,8 +1,10 @@
 package com.example.data.db
 
+import androidx.room.Embedded
 import androidx.room.Entity
 import androidx.room.Index
 import androidx.room.PrimaryKey
+import androidx.room.Relation
 import androidx.room.TypeConverter
 
 @Entity(
@@ -30,7 +32,46 @@ data class SmsMessageEntity(
     val category: SmsCategory,
     val extractedOtp: String? = null,
     val confidenceScore: Float = 1.0f,
-    val classificationSource: String = "PIPELINE"
+    val classificationSource: String = "PIPELINE",
+    val transportType: String = "SMS",
+    val deliveryStatus: String = "NONE",
+    val systemMmsId: Long? = null,
+    val mmsSubject: String? = null,
+    val mmsContentLocation: String? = null,
+    val mmsTransactionId: String? = null,
+    val mmsSizeBytes: Long = 0L,
+    val groupRecipientsJson: String? = null,
+    val replyToMessageId: Long? = null,
+    val replyToSender: String? = null,
+    val replyToSnippet: String? = null,
+    val reactionsJson: String? = null,
+    val isHiddenReaction: Boolean = false
+)
+
+@Entity(
+    tableName = "mms_attachments",
+    indices = [Index(value = ["messageId"])]
+)
+data class MmsAttachmentEntity(
+    @PrimaryKey(autoGenerate = true)
+    val id: Long = 0L,
+    val messageId: Long,
+    val partIndex: Int = 0,
+    val contentType: String,
+    val fileName: String? = null,
+    val localFilePath: String? = null,
+    val contentId: String? = null,
+    val sizeBytes: Long = 0L,
+    val textContent: String? = null
+)
+
+data class SmsMessageWithAttachments(
+    @Embedded val message: SmsMessageEntity,
+    @Relation(
+        parentColumn = "id",
+        entityColumn = "messageId"
+    )
+    val attachments: List<MmsAttachmentEntity> = emptyList()
 )
 
 @Entity(tableName = "sender_category_rules")
@@ -54,7 +95,12 @@ data class ThreadSummary(
     val isArchived: Boolean,
     val unreadCount: Int,
     val messageCount: Int,
-    val classificationSource: String
+    val classificationSource: String,
+    val transportType: String = "SMS",
+    val deliveryStatus: String = "NONE",
+    val hasAttachments: Boolean = false,
+    val mmsSubject: String? = null,
+    val groupRecipientsJson: String? = null
 )
 
 data class CategoryUnreadCount(

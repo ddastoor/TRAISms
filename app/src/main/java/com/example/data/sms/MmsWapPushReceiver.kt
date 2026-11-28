@@ -14,7 +14,8 @@ import kotlinx.coroutines.launch
  * Default SMS BroadcastReceiver (`android.provider.Telephony.WAP_PUSH_DELIVER`)
  * required by Android RoleManager (`ROLE_SMS`) for MMS WAP Push compliance.
  * Protected by `android.permission.BROADCAST_WAP_PUSH` in AndroidManifest.xml.
- * Note: Zero network downloads are performed because TRAISms enforces 100% offline execution.
+ * Operates strictly via OS-brokered carrier MMS service in 100% Offline Mode
+ * with zero direct app network permissions or HTTP clients.
  */
 class MmsWapPushReceiver : BroadcastReceiver() {
 
@@ -29,13 +30,24 @@ class MmsWapPushReceiver : BroadcastReceiver() {
             return
         }
 
+        val pduBytes = intent.getByteArrayExtra("data")
+        val subscriptionId = intent.getIntExtra("subscription", -1)
+
         CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
             try {
-                app.container.smsRepository.handleIncomingSms(
-                    rawAddress = "MMS-GATEWAY",
-                    body = "[Incoming Multimedia Message (MMS) notification received. Carrier data fetch is disabled in 100% Offline Mode.]",
-                    timestampMillis = System.currentTimeMillis()
-                )
+                if (pduBytes != null && pduBytes.isNotEmpty()) {
+                    app.container.smsRepository.handleIncomingMmsWapPush(
+                        pduBytes = pduBytes,
+                        subscriptionId = subscriptionId,
+                        timestampMillis = System.currentTimeMillis()
+                    )
+                } else {
+                    app.container.smsRepository.handleIncomingSms(
+                        rawAddress = "MMS-GATEWAY",
+                        body = "[Incoming Multimedia Message (MMS) notification received. Carrier data fetch is disabled in 100% Offline Mode.]",
+                        timestampMillis = System.currentTimeMillis()
+                    )
+                }
             } finally {
                 pendingResult.finish()
             }

@@ -1,11 +1,15 @@
 package com.example.ui.thread
 
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
@@ -18,7 +22,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
@@ -26,13 +32,17 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.outlined.Add
+import androidx.compose.material.icons.outlined.AddCircleOutline
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Person
+import androidx.compose.material.icons.outlined.Subject
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.InputChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
@@ -45,6 +55,7 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -62,7 +73,10 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import com.example.R
 import com.example.data.sms.ContactLookupCache
+import com.example.data.sms.PendingMmsAttachment
+import com.example.data.sms.RcsInteropCodec
 import com.example.data.sms.SimpleContact
+import com.example.data.sms.SystemSmsHelper
 import com.example.ui.theme.JetBrainsMonoFamily
 import com.example.ui.theme.LocalSmsTextPreferences
 import com.example.ui.theme.smsMessageBodyStyle
@@ -77,7 +91,9 @@ fun ComposeSmsScreen(
     initialBody: String,
     contactCache: ContactLookupCache,
     onBack: () -> Unit,
-    onSendSms: (recipient: String, body: String, onResult: (Result<String>) -> Unit) -> Unit
+    onSendSms: (recipient: String, body: String, onResult: (Result<String>) -> Unit) -> Unit,
+    systemSmsHelper: SystemSmsHelper? = null,
+    onSendMms: ((recipients: List<String>, body: String, subject: String?, attachments: List<PendingMmsAttachment>, onResult: (Result<String>) -> Unit) -> Unit)? = null
 ) {
     BackHandler(onBack = onBack)
 
@@ -88,8 +104,52 @@ fun ComposeSmsScreen(
 
     var recipient by rememberSaveable(initialRecipient) { mutableStateOf(initialRecipient) }
     var messageBody by rememberSaveable(initialBody) { mutableStateOf(initialBody) }
+    var mmsSubject by rememberSaveable { mutableStateOf("") }
+    var showSubjectInput by rememberSaveable { mutableStateOf(false) }
+    val groupRecipients = remember { mutableStateListOf<String>() }
+    val pendingAttachments = remember { mutableStateListOf<PendingMmsAttachment>() }
+    var showAttachmentSheet by remember { mutableStateOf(false) }
+    var showContactVCardDialog by remember { mutableStateOf(false) }
+    var showLocationDialog by remember { mutableStateOf(false) }
+
     var contactSuggestions by remember { mutableStateOf<List<SimpleContact>>(emptyList()) }
     val bodyFocusRequester = remember { FocusRequester() }
+
+    val mediaPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickMultipleVisualMedia(5)
+    ) { uris ->
+        if (uris.isEmpty() || systemSmsHelper == null) return@rememberLauncherForActivityResult
+        scope.launch {
+            val staged = withContext(Dispatchers.IO) {
+                uris.mapNotNull { uri ->
+                    systemSmsHelper.stageLocalAttachmentFromUri(
+                        sourceUri = uri,
+                        fallbackMime = "image/jpeg",
+                        fallbackName = "media_${System.currentTimeMillis()}"
+                    ).getOrNull()
+                }
+            }
+            pendingAttachments.addAll(staged)
+        }
+    }
+
+    val filePickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri == null || systemSmsHelper == null) return@rememberLauncherForActivityResult
+        scope.launch {
+            val staged = withContext(Dispatchers.IO) {
+                systemSmsHelper.stageLocalAttachmentFromUri(
+                    sourceUri = uri,
+                    fallbackMime = "application/octet-stream",
+                    fallbackName = "attachment_${System.currentTimeMillis()}"
+                ).getOrNull()
+            }
+            if (staged != null) {
+                pendingAttachments.add(staged)
+            }
+        }
+    }
 
     LaunchedEffect(recipient) {
         contactSuggestions = withContext(Dispatchers.IO) {
@@ -97,6 +157,8 @@ fun ComposeSmsScreen(
         }
     }
 
+    val allRecipients = (groupRecipients + listOfNotNull(recipient.trim().takeIf { it.isNotEmpty() })).distinct()
+    val isMmsMode = allRecipients.size > 1 || pendingAttachments.isNotEmpty() || mmsSubject.isNotBlank()
     val segments = ((messageBody.length.coerceAtLeast(1) - 1) / 160) + 1
 
     Scaffold(
@@ -144,6 +206,25 @@ fun ComposeSmsScreen(
                         .navigationBarsPadding()
                         .padding(horizontal = 16.dp, vertical = 8.dp)
                 ) {
+                    PendingAttachmentsStrip(
+                        attachments = pendingAttachments,
+                        onRemoveAt = { idx -> pendingAttachments.removeAt(idx) },
+                        modifier = Modifier.testTag("compose_pending_attachments_strip")
+                    )
+
+                    if (showSubjectInput) {
+                        OutlinedTextField(
+                            value = mmsSubject,
+                            onValueChange = { mmsSubject = it },
+                            singleLine = true,
+                            label = { Text(stringResource(R.string.mms_subject_label)) },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(bottom = 6.dp)
+                                .testTag("compose_mms_subject_input")
+                        )
+                    }
+
                     OutlinedTextField(
                         value = messageBody,
                         onValueChange = { messageBody = it },
@@ -167,24 +248,70 @@ fun ComposeSmsScreen(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Text(
-                            text = "${messageBody.length} chars • $segments SMS part(s)",
-                            style = MaterialTheme.typography.labelSmall.copy(fontFamily = JetBrainsMonoFamily),
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            IconButton(
+                                onClick = { showAttachmentSheet = true },
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .testTag("compose_attach_button")
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Outlined.AddCircleOutline,
+                                    contentDescription = "Attach media or file",
+                                    tint = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                            IconButton(
+                                onClick = { showSubjectInput = !showSubjectInput },
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .testTag("compose_toggle_subject_button")
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Outlined.Subject,
+                                    contentDescription = "Toggle MMS subject",
+                                    tint = if (showSubjectInput) MaterialTheme.colorScheme.primary
+                                    else MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = if (isMmsMode) {
+                                    "MMS • ${pendingAttachments.size} file(s)"
+                                } else {
+                                    "${messageBody.length} chars • $segments SMS part(s)"
+                                },
+                                style = MaterialTheme.typography.labelSmall.copy(fontFamily = JetBrainsMonoFamily),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        val canSend = allRecipients.isNotEmpty() &&
+                            (messageBody.isNotBlank() || pendingAttachments.isNotEmpty() || mmsSubject.isNotBlank())
                         Button(
                             onClick = {
-                                onSendSms(recipient.trim(), messageBody) { result ->
+                                if (!canSend) return@Button
+                                val onComplete: (Result<String>) -> Unit = { result ->
                                     if (result.isFailure) {
                                         scope.launch {
                                             snackbarHostState.showSnackbar(
-                                                result.exceptionOrNull()?.message ?: "Failed to send SMS"
+                                                result.exceptionOrNull()?.message ?: "Failed to send message"
                                             )
                                         }
                                     }
                                 }
+                                if (isMmsMode && onSendMms != null) {
+                                    onSendMms(
+                                        allRecipients,
+                                        messageBody,
+                                        mmsSubject.trim().takeIf { it.isNotEmpty() },
+                                        pendingAttachments.toList(),
+                                        onComplete
+                                    )
+                                } else {
+                                    onSendSms(allRecipients.first(), messageBody, onComplete)
+                                }
                             },
-                            enabled = recipient.isNotBlank() && messageBody.isNotBlank(),
+                            enabled = canSend,
                             modifier = Modifier.testTag("compose_send_button")
                         ) {
                             Icon(
@@ -193,7 +320,7 @@ fun ComposeSmsScreen(
                                 modifier = Modifier.size(18.dp)
                             )
                             Spacer(modifier = Modifier.width(8.dp))
-                            Text("Send SMS")
+                            Text(if (isMmsMode) "Send MMS" else "Send SMS")
                         }
                     }
                 }
@@ -206,37 +333,87 @@ fun ComposeSmsScreen(
                 .padding(innerPadding)
                 .background(MaterialTheme.colorScheme.background)
         ) {
-            OutlinedTextField(
-                value = recipient,
-                onValueChange = { recipient = it },
-                singleLine = true,
-                label = { Text(stringResource(R.string.recipient_label)) },
-                leadingIcon = { Icon(Icons.Outlined.Person, contentDescription = null) },
-                trailingIcon = if (recipient.isNotEmpty()) {
-                    {
-                        IconButton(
-                            onClick = { recipient = "" },
-                            modifier = Modifier.testTag("compose_recipient_clear")
-                        ) {
-                            Icon(
-                                imageVector = Icons.Outlined.Close,
-                                contentDescription = stringResource(R.string.clear_recipient_cd)
-                            )
-                        }
-                    }
-                } else {
-                    null
-                },
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
-                keyboardActions = KeyboardActions(
-                    onNext = { runCatching { bodyFocusRequester.requestFocus() } }
-                ),
-                shape = RoundedCornerShape(12.dp),
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp, vertical = 8.dp)
-                    .testTag("compose_recipient_input")
-            )
+            ) {
+                OutlinedTextField(
+                    value = recipient,
+                    onValueChange = { recipient = it },
+                    singleLine = true,
+                    label = { Text(stringResource(R.string.recipient_label)) },
+                    leadingIcon = { Icon(Icons.Outlined.Person, contentDescription = null) },
+                    trailingIcon = if (recipient.isNotEmpty()) {
+                        {
+                            IconButton(
+                                onClick = { recipient = "" },
+                                modifier = Modifier.testTag("compose_recipient_clear")
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Outlined.Close,
+                                    contentDescription = stringResource(R.string.clear_recipient_cd)
+                                )
+                            }
+                        }
+                    } else {
+                        null
+                    },
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
+                    keyboardActions = KeyboardActions(
+                        onNext = { runCatching { bodyFocusRequester.requestFocus() } }
+                    ),
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier
+                        .weight(1f)
+                        .testTag("compose_recipient_input")
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                IconButton(
+                    onClick = {
+                        val trimmed = recipient.trim()
+                        if (trimmed.isNotEmpty() && trimmed !in groupRecipients) {
+                            groupRecipients.add(trimmed)
+                            recipient = ""
+                        }
+                    },
+                    enabled = recipient.isNotBlank(),
+                    modifier = Modifier.testTag("compose_add_group_recipient_button")
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.Add,
+                        contentDescription = "Add group recipient"
+                    )
+                }
+            }
+
+            if (groupRecipients.isNotEmpty()) {
+                LazyRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("compose_group_recipients_row")
+                ) {
+                    itemsIndexed(groupRecipients) { index, addr ->
+                        InputChip(
+                            selected = true,
+                            onClick = { groupRecipients.removeAt(index) },
+                            label = { Text(addr) },
+                            trailingIcon = {
+                                Icon(
+                                    imageVector = Icons.Outlined.Close,
+                                    contentDescription = "Remove $addr",
+                                    modifier = Modifier
+                                        .size(16.dp)
+                                        .testTag("compose_remove_group_recipient_$index")
+                                )
+                            }
+                        )
+                    }
+                }
+            }
 
             if (contactSuggestions.isNotEmpty()) {
                 Text(
@@ -335,5 +512,57 @@ fun ComposeSmsScreen(
                 }
             }
         }
+    }
+
+    if (showAttachmentSheet) {
+        AttachmentPickerBottomSheet(
+            onDismiss = { showAttachmentSheet = false },
+            onPickMedia = {
+                mediaPickerLauncher.launch(
+                    PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo)
+                )
+            },
+            onPickFile = { filePickerLauncher.launch(arrayOf("*/*")) },
+            onPickContact = { showContactVCardDialog = true },
+            onPickLocation = { showLocationDialog = true }
+        )
+    }
+
+    if (showContactVCardDialog) {
+        ContactVCardPickerDialog(
+            contactCache = contactCache,
+            onDismiss = { showContactVCardDialog = false },
+            onSelectContact = { selected ->
+                showContactVCardDialog = false
+                val vCard = RcsInteropCodec.buildVCardContent(selected.displayName, selected.phoneNumber)
+                val safeFile = "${selected.displayName.replace(Regex("[^A-Za-z0-9]"), "_")}.vcf"
+                val staged = systemSmsHelper?.stageTextAttachment("text/x-vcard", safeFile, vCard)?.getOrNull()
+                    ?: PendingMmsAttachment(
+                        contentType = "text/x-vcard",
+                        fileName = safeFile,
+                        sizeBytes = vCard.length.toLong(),
+                        textContent = vCard
+                    )
+                pendingAttachments.add(staged)
+            }
+        )
+    }
+
+    if (showLocationDialog) {
+        OfflineLocationTextDialog(
+            onDismiss = { showLocationDialog = false },
+            onConfirmLocation = { note ->
+                showLocationDialog = false
+                val content = "Location: $note"
+                val staged = systemSmsHelper?.stageTextAttachment("text/plain", "location.txt", content)?.getOrNull()
+                    ?: PendingMmsAttachment(
+                        contentType = "text/plain",
+                        fileName = "location.txt",
+                        sizeBytes = content.length.toLong(),
+                        textContent = content
+                    )
+                pendingAttachments.add(staged)
+            }
+        )
     }
 }

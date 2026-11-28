@@ -5,6 +5,8 @@ import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 import androidx.sqlite.db.SupportSQLiteOpenHelper
 import androidx.sqlite.db.framework.FrameworkSQLiteOpenHelperFactory
 import com.example.data.crypto.TinkKeyManager
@@ -13,9 +15,10 @@ import net.zetetic.database.sqlcipher.SupportOpenHelperFactory
 @Database(
     entities = [
         SmsMessageEntity::class,
-        SenderCategoryRuleEntity::class
+        SenderCategoryRuleEntity::class,
+        MmsAttachmentEntity::class
     ],
-    version = 1,
+    version = 2,
     exportSchema = false
 )
 @TypeConverters(SmsTypeConverters::class)
@@ -58,6 +61,43 @@ abstract class TraiSmsDatabase : RoomDatabase() {
     companion object {
         private const val DB_NAME = "traisms_encrypted_vault.db"
 
+        val MIGRATION_1_2: Migration = object : Migration(1, 2) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE sms_messages ADD COLUMN transportType TEXT NOT NULL DEFAULT 'SMS'")
+                db.execSQL("ALTER TABLE sms_messages ADD COLUMN deliveryStatus TEXT NOT NULL DEFAULT 'NONE'")
+                db.execSQL("ALTER TABLE sms_messages ADD COLUMN systemMmsId INTEGER")
+                db.execSQL("ALTER TABLE sms_messages ADD COLUMN mmsSubject TEXT")
+                db.execSQL("ALTER TABLE sms_messages ADD COLUMN mmsContentLocation TEXT")
+                db.execSQL("ALTER TABLE sms_messages ADD COLUMN mmsTransactionId TEXT")
+                db.execSQL("ALTER TABLE sms_messages ADD COLUMN mmsSizeBytes INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE sms_messages ADD COLUMN groupRecipientsJson TEXT")
+                db.execSQL("ALTER TABLE sms_messages ADD COLUMN replyToMessageId INTEGER")
+                db.execSQL("ALTER TABLE sms_messages ADD COLUMN replyToSender TEXT")
+                db.execSQL("ALTER TABLE sms_messages ADD COLUMN replyToSnippet TEXT")
+                db.execSQL("ALTER TABLE sms_messages ADD COLUMN reactionsJson TEXT")
+                db.execSQL("ALTER TABLE sms_messages ADD COLUMN isHiddenReaction INTEGER NOT NULL DEFAULT 0")
+
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `mms_attachments` (
+                        `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        `messageId` INTEGER NOT NULL,
+                        `partIndex` INTEGER NOT NULL,
+                        `contentType` TEXT NOT NULL,
+                        `fileName` TEXT,
+                        `localFilePath` TEXT,
+                        `contentId` TEXT,
+                        `sizeBytes` INTEGER NOT NULL,
+                        `textContent` TEXT
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_mms_attachments_messageId` ON `mms_attachments` (`messageId`)"
+                )
+            }
+        }
+
         @Volatile
         private var instance: TraiSmsDatabase? = null
 
@@ -72,7 +112,7 @@ abstract class TraiSmsDatabase : RoomDatabase() {
                     DB_NAME
                 )
                     .openHelperFactory(LazySqlCipherOpenHelperFactory(tinkKeyManager))
-                    .fallbackToDestructiveMigration(dropAllTables = true)
+                    .addMigrations(MIGRATION_1_2)
                     .build()
                     .also { instance = it }
             }

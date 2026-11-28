@@ -1,4 +1,4 @@
-# TRAISms v1.0.5 — App-Wide Screenshot Support with Full Security Hardening Intact
+# TRAISms v1.0.6 — Carrier MMS, Google Messages-Style RCS Rich UX & Launch Default SMS Chooser
 
 **Package ID:** `com.traisms.app`  
 **Minimum Android Version:** Android 7.0 (API 24) • **Target SDK:** Android 16 (API 36)  
@@ -8,13 +8,13 @@
 
 ## Download & Install
 
-Download **`TRAISms-v1.0.5-release.apk`** from the **Assets** section below:
+Download **`TRAISms-v1.0.6-release.apk`** from the **Assets** section below:
 
 1. Verify the file's SHA-256 checksum against `SHA256SUMS.txt`:
    ```bash
    sha256sum -c SHA256SUMS.txt
    ```
-2. Transfer `TRAISms-v1.0.5-release.apk` to your Android phone and open it to install.
+2. Transfer `TRAISms-v1.0.6-release.apk` to your Android phone and open it to install.
 3. Launch **TRAISms** and tap **Set TRAISms as Default SMS App** to import and encrypt your existing SMS inbox on-device.
 
 ### Installing on Android 15 / 16 (Google Pixel & Sideloaded APKs)
@@ -31,9 +31,18 @@ To unlock Default SMS access in 3 steps:
 
 ---
 
-## What's New in v1.0.5
+## What's New in v1.0.6
 
-- **Unrestricted Screenshot Support Across All App Surfaces:**
+- **Real Carrier MMS Send & Receive (Zero `INTERNET` Permissions):**
+  - Added full OS-brokered `SmsManager` multimedia messaging (`sendMultimediaMessage` / `downloadMultimediaMessage`), a pure-Kotlin binary MMS PDU encoder/decoder (`M-Send.req`, `M-Notification.ind`, `M-Retrieve.conf`, `M-Delivery.ind`, `M-Read-Orig.ind`, SMIL multipart payloads), non-exported `FileProvider` staging, `MmsWapPushReceiver` auto/manual download handling, `Telephony.Mms` sync, group MMS recipients, optional MMS subjects, and non-destructive SQLCipher Room `MIGRATION_1_2` (`v1 -> v2`).
+- **Google Messages-Style RCS Rich Messaging UX & Interoperability:**
+  - Added emoji tapback reactions (`👍`, `❤️`, `😂`, `😮`, `😢`, `😡`) with Google Messages fallback text encoding/parsing (`Liked “…”`, `Loved “…”`, `Laughed at “…”`, `Reacted … to “…”`), inline quoted message replies, real `Sending…` / `Sent` / `Delivered` / `Read` / `Failed` status indicators via immutable `PendingIntent` delivery callbacks, rich media/audio/file/vCard/offline-location attachments, RCS history import, and Tink-encrypted **RCS & Multimedia Messaging (MMS)** settings toggles.
+- **Automatic Default SMS App Check & Chooser Popup on Every Launch:**
+  - Checks `isDefaultSmsApp()` on cold start and foreground return (`onStop -> onStart`, respecting `AppLockGateScreen` when enabled) and automatically pops up the system Default SMS chooser (`RoleManager.ROLE_SMS` with `ACTION_CHANGE_DEFAULT` fallback), guarded against `onPause -> onResume` dismissal relaunch loops.
+
+### Previous Highlights (v1.0.5, v1.0.4, v1.0.3, v1.0.2 & v1.0.1)
+
+- **Unrestricted Screenshot Support (`v1.0.5`):**
   - Removed `WindowManager.LayoutParams.FLAG_SECURE` restrictions so you can freely capture screenshots of any screen, category tab, conversation thread, bottom sheet, dropdown menu, or dialog across TRAISms on both physical devices and emulators.
   - Seamlessly migrates existing encrypted `traisms_secure_settings.pb` Tink DataStore installations so upgrading from earlier releases immediately unlocks screenshots without losing any preferences or messages.
 - **All Security-Hardened Protections Preserved Intact:**

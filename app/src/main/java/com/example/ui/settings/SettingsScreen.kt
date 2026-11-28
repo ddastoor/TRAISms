@@ -108,7 +108,10 @@ fun SettingsScreen(
     onDeleteAllMessagesInApp: () -> Unit,
     onUpdateSmsFontSize: (SmsFontSize) -> Unit = {},
     onUpdateSmsFontBold: (Boolean) -> Unit = {},
-    onUpdateOtpAutoDelete: (Int) -> Unit = {}
+    onUpdateOtpAutoDelete: (Int) -> Unit = {},
+    onUpdateRcsChatsEnabled: (Boolean) -> Unit = {},
+    onUpdateAutoDownloadMms: (Boolean) -> Unit = {},
+    onUpdateSendReadReceipts: (Boolean) -> Unit = {}
 ) {
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
@@ -387,6 +390,70 @@ fun SettingsScreen(
                                 modifier = Modifier.testTag("otp_preset_$days")
                             )
                         }
+                    }
+                }
+
+                // 3. RCS & MULTIMEDIA MESSAGING (MMS) CARD
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                    shape = RoundedCornerShape(16.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("rcs_mms_settings_card")
+                ) {
+                    Column(
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                        modifier = Modifier.padding(16.dp)
+                    ) {
+                        Row(verticalAlignment = Alignment.Top) {
+                            Icon(
+                                imageVector = Icons.Outlined.Sms,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.padding(top = 2.dp)
+                            )
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Column {
+                                Text(
+                                    text = stringResource(R.string.rcs_mms_settings_title),
+                                    style = MaterialTheme.typography.titleMedium
+                                )
+                                Text(
+                                    text = stringResource(R.string.rcs_mms_settings_subtitle),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+
+                        SettingsToggleRow(
+                            title = "RCS Rich Messaging Interop",
+                            subtitle = "Enable emoji tapbacks, inline quoted replies, and Google Messages reaction folding.",
+                            checked = settings.rcsChatsEnabled,
+                            onCheckedChange = onUpdateRcsChatsEnabled,
+                            testTag = "rcs_chats_switch"
+                        )
+
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+
+                        SettingsToggleRow(
+                            title = "Auto-download MMS",
+                            subtitle = "Automatically fetch incoming carrier MMS via Android OS MMS service.",
+                            checked = settings.autoDownloadMms,
+                            onCheckedChange = onUpdateAutoDownloadMms,
+                            testTag = "auto_download_mms_switch"
+                        )
+
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+
+                        SettingsToggleRow(
+                            title = "Send Read Receipts",
+                            subtitle = "Send carrier MMS read confirmations when you open a requested MMS thread.",
+                            checked = settings.sendReadReceipts,
+                            onCheckedChange = onUpdateSendReadReceipts,
+                            testTag = "send_read_receipts_switch"
+                        )
                     }
                 }
 

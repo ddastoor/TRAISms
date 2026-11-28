@@ -1,6 +1,7 @@
 package com.example
 
 import android.app.KeyguardManager
+import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.hardware.biometrics.BiometricManager
 import android.hardware.biometrics.BiometricPrompt
@@ -13,6 +14,7 @@ import androidx.activity.SystemBarStyle
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -55,6 +57,7 @@ import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -82,6 +85,7 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.toRoute
 import com.example.data.db.SmsCategory
 import com.example.data.sms.SmsNotificationHelper
+import com.example.data.sms.SystemSmsHelper
 import com.example.ui.AssignCategoryRequest
 import com.example.ui.MainViewModel
 import com.example.ui.archive.ArchiveScreen
@@ -135,6 +139,63 @@ data class PendingExternalAction(
 class MainActivity : ComponentActivity() {
 
     private var pendingExternalAction by mutableStateOf<PendingExternalAction?>(null)
+    private var isRequestingDefaultSmsRole = false
+    private var hasEnteredStopped = false
+    private var promptedDefaultSmsThisForeground by mutableStateOf(false)
+    private var foregroundEpoch by mutableIntStateOf(0)
+    private var onDefaultSmsRoleReturned: (() -> Unit)? = null
+
+    private val defaultSmsRoleLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) {
+        isRequestingDefaultSmsRole = false
+        onDefaultSmsRoleReturned?.invoke()
+    }
+
+    override fun onStart() {
+        super.onStart()
+        if (hasEnteredStopped) {
+            hasEnteredStopped = false
+            promptedDefaultSmsThisForeground = false
+            foregroundEpoch += 1
+        }
+    }
+
+    override fun onStop() {
+        super.onStop()
+        if (!isChangingConfigurations && !isRequestingDefaultSmsRole) {
+            hasEnteredStopped = true
+        }
+    }
+
+    fun maybePromptDefaultSmsRoleOnLaunch(systemSmsHelper: SystemSmsHelper) {
+        if (systemSmsHelper.isDefaultSmsApp() ||
+            promptedDefaultSmsThisForeground ||
+            isRequestingDefaultSmsRole
+        ) {
+            return
+        }
+        promptedDefaultSmsThisForeground = true
+        isRequestingDefaultSmsRole = true
+
+        val primaryIntent = systemSmsHelper.createDefaultSmsRequestIntent()
+        if (primaryIntent == null) {
+            isRequestingDefaultSmsRole = false
+            return
+        }
+
+        try {
+            defaultSmsRoleLauncher.launch(primaryIntent)
+        } catch (_: ActivityNotFoundException) {
+            try {
+                defaultSmsRoleLauncher.launch(systemSmsHelper.createFallbackDefaultSmsIntent())
+            } catch (_: Exception) {
+                isRequestingDefaultSmsRole = false
+            }
+        } catch (_: Exception) {
+            isRequestingDefaultSmsRole = false
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -157,6 +218,7 @@ class MainActivity : ComponentActivity() {
             val mainViewModel: MainViewModel = viewModel(
                 factory = MainViewModel.provideFactory(appContainer)
             )
+            onDefaultSmsRoleReturned = { mainViewModel.refreshPermissionsAndSyncIfAuthorized() }
             val settings by mainViewModel.settings.collectAsStateWithLifecycle()
 
             LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
@@ -171,7 +233,9 @@ class MainActivity : ComponentActivity() {
                     activity = this@MainActivity,
                     viewModel = mainViewModel,
                     pendingExternalAction = pendingExternalAction,
-                    onConsumeExternalAction = { pendingExternalAction = null }
+                    onConsumeExternalAction = { pendingExternalAction = null },
+                    foregroundEpoch = foregroundEpoch,
+                    onRequestDefaultSmsPopup = { maybePromptDefaultSmsRoleOnLaunch(mainViewModel.systemSmsHelper) }
                 )
             }
         }
@@ -312,8 +376,11 @@ fun TraiSmsPrimaryApp(
     activity: ComponentActivity,
     viewModel: MainViewModel,
     pendingExternalAction: PendingExternalAction?,
-    onConsumeExternalAction: () -> Unit
+    onConsumeExternalAction: () -> Unit,
+    foregroundEpoch: Int = 0,
+    onRequestDefaultSmsPopup: () -> Unit = {}
 ) {
+    val isSettingsReady by viewModel.isSettingsReady.collectAsStateWithLifecycle()
     val settings by viewModel.settings.collectAsStateWithLifecycle()
     val isDefaultSmsApp by viewModel.isDefaultSmsApp.collectAsStateWithLifecycle()
     val showEmulatorDemo by viewModel.showEmulatorDemoOption.collectAsStateWithLifecycle()
@@ -349,6 +416,14 @@ fun TraiSmsPrimaryApp(
             launchNativeBiometricUnlock(activity) { unlocked ->
                 isSessionUnlocked = unlocked
             }
+        }
+    }
+
+    LaunchedEffect(isSettingsReady, settings.appLockEnabled, isSessionUnlocked, foregroundEpoch) {
+        if (!isSettingsReady) return@LaunchedEffect
+        if (settings.appLockEnabled && !isSessionUnlocked) return@LaunchedEffect
+        if (!viewModel.systemSmsHelper.isDefaultSmsApp()) {
+            onRequestDefaultSmsPopup()
         }
     }
 
@@ -513,7 +588,10 @@ fun TraiSmsPrimaryApp(
                         onDeleteAllMessagesInApp = viewModel::deleteAllMessagesInApp,
                         onUpdateSmsFontSize = viewModel::updateSmsFontSize,
                         onUpdateSmsFontBold = viewModel::updateSmsFontBold,
-                        onUpdateOtpAutoDelete = viewModel::updateOtpAutoDeleteDays
+                        onUpdateOtpAutoDelete = viewModel::updateOtpAutoDeleteDays,
+                        onUpdateRcsChatsEnabled = viewModel::updateRcsChatsEnabled,
+                        onUpdateAutoDownloadMms = viewModel::updateAutoDownloadMms,
+                        onUpdateSendReadReceipts = viewModel::updateSendReadReceipts
                     )
                 }
 
@@ -543,8 +621,15 @@ fun TraiSmsPrimaryApp(
 
                 composable<ThreadDetailRoute> { entry ->
                     val route = entry.toRoute<ThreadDetailRoute>()
-                    val threadMessages by viewModel.observeThreadMessages(route.threadKey)
+                    val threadMessagesWithAttachments by viewModel
+                        .observeThreadMessagesWithAttachments(route.threadKey)
                         .collectAsStateWithLifecycle(initialValue = emptyList())
+                    val threadMessages = remember(threadMessagesWithAttachments) {
+                        threadMessagesWithAttachments.map { it.message }
+                    }
+                    val attachmentsByMessageId = remember(threadMessagesWithAttachments) {
+                        threadMessagesWithAttachments.associate { it.message.id to it.attachments }
+                    }
 
                     ThreadDetailScreen(
                         threadKey = route.threadKey,
@@ -557,7 +642,16 @@ fun TraiSmsPrimaryApp(
                         onAssignCategory = viewModel::assignSenderCategory,
                         onForwardMessage = { forwardedBody ->
                             navController.navigate(ComposeSmsRoute(initialBody = forwardedBody))
-                        }
+                        },
+                        attachmentsByMessageId = attachmentsByMessageId,
+                        rcsChatsEnabled = settings.rcsChatsEnabled,
+                        contactCache = viewModel.contactCache,
+                        systemSmsHelper = viewModel.systemSmsHelper,
+                        onSendReplyWithQuote = viewModel::sendSmsWithQuote,
+                        onSendMmsReply = viewModel::sendMms,
+                        onToggleReaction = { msgId, emoji -> viewModel.sendReaction(msgId, emoji) },
+                        onDownloadMms = { msgId -> viewModel.downloadPendingMms(msgId) },
+                        onRetryMessage = { msgId -> viewModel.retryFailedMessage(msgId) }
                     )
                 }
 
@@ -570,6 +664,16 @@ fun TraiSmsPrimaryApp(
                         onBack = { navController.popBackStack() },
                         onSendSms = { recipient, body, onResult ->
                             viewModel.sendSms(recipient, body) { res ->
+                                onResult(res)
+                                res.onSuccess { newThreadKey ->
+                                    navController.popBackStack()
+                                    navController.navigate(ThreadDetailRoute(newThreadKey))
+                                }
+                            }
+                        },
+                        systemSmsHelper = viewModel.systemSmsHelper,
+                        onSendMms = { recipients, body, subject, attachments, onResult ->
+                            viewModel.sendMms(recipients, body, subject, attachments) { res ->
                                 onResult(res)
                                 res.onSuccess { newThreadKey ->
                                     navController.popBackStack()

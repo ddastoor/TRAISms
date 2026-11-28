@@ -29,7 +29,13 @@ data class BackupMessageRecord(
     val category: SmsCategory,
     val extractedOtp: String? = null,
     val confidenceScore: Float = 1.0f,
-    val classificationSource: String = "RESTORED"
+    val classificationSource: String = "RESTORED",
+    val transportType: String = "SMS",
+    val mmsSubject: String? = null,
+    val replyToSender: String? = null,
+    val replyToSnippet: String? = null,
+    val reactionsJson: String? = null,
+    val groupRecipientsJson: String? = null
 )
 
 @Serializable

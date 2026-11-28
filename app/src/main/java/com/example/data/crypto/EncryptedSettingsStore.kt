@@ -63,7 +63,10 @@ data class AppSettings(
     val smsFontSize: SmsFontSize = SmsFontSize.DEFAULT,
     val smsFontBold: Boolean = false,
     val categoryShowUnreadOnly: Map<String, Boolean> = emptyMap(), // Per-tab Show Unread toggle; absent keys default to true = Unread Only
-    val rightSwipeAction: LeftSwipeAction = LeftSwipeAction.ASSIGN_CATEGORY
+    val rightSwipeAction: LeftSwipeAction = LeftSwipeAction.ASSIGN_CATEGORY,
+    val rcsChatsEnabled: Boolean = true,
+    val autoDownloadMms: Boolean = true,
+    val sendReadReceipts: Boolean = true
 ) {
     fun isCategoryUnreadOnly(category: SmsCategory): Boolean =
         categoryShowUnreadOnly[category.name] ?: true

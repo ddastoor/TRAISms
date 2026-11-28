@@ -12,7 +12,9 @@ import com.example.data.crypto.SmsFontSize
 import com.example.data.db.CategoryUnreadCount
 import com.example.data.db.SmsCategory
 import com.example.data.db.SmsMessageEntity
+import com.example.data.db.SmsMessageWithAttachments
 import com.example.data.db.ThreadSummary
+import com.example.data.sms.PendingMmsAttachment
 import com.example.data.sms.RestoreSummary
 import com.example.data.sms.SyncProgressState
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -25,6 +27,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -47,11 +50,16 @@ class MainViewModel(
     private val workScheduler = container.workScheduler
     private val regionDetector = container.regionDetector
 
-    val settings: StateFlow<AppSettings> = settingsStore.settingsFlow.stateIn(
-        scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5_000),
-        initialValue = AppSettings()
-    )
+    private val _isSettingsReady = MutableStateFlow(false)
+    val isSettingsReady: StateFlow<Boolean> = _isSettingsReady.asStateFlow()
+
+    val settings: StateFlow<AppSettings> = settingsStore.settingsFlow
+        .onEach { _isSettingsReady.value = true }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5_000),
+            initialValue = AppSettings()
+        )
 
     private val _selectedCategory = MutableStateFlow(SmsCategory.PERSONAL)
     val selectedCategory: StateFlow<SmsCategory> = _selectedCategory.asStateFlow()
@@ -197,6 +205,9 @@ class MainViewModel(
     fun observeThreadMessages(threadKey: String): Flow<List<SmsMessageEntity>> =
         repository.observeThreadMessages(threadKey)
 
+    fun observeThreadMessagesWithAttachments(threadKey: String): Flow<List<SmsMessageWithAttachments>> =
+        repository.observeThreadMessagesWithAttachments(threadKey)
+
     fun markThreadRead(threadKey: String) {
         viewModelScope.launch {
             repository.markThreadAsRead(threadKey)
@@ -246,6 +257,69 @@ class MainViewModel(
     ) {
         viewModelScope.launch {
             val result = repository.sendOutgoingSms(recipient, body)
+            onResult(result)
+        }
+    }
+
+    fun sendSmsWithQuote(
+        recipient: String,
+        body: String,
+        replyToMessageId: Long?,
+        onResult: (Result<String>) -> Unit
+    ) {
+        viewModelScope.launch {
+            val result = repository.sendOutgoingSms(recipient, body, replyToMessageId)
+            onResult(result)
+        }
+    }
+
+    fun sendMms(
+        recipients: List<String>,
+        body: String,
+        subject: String?,
+        attachments: List<PendingMmsAttachment>,
+        replyToMessageId: Long? = null,
+        onResult: (Result<String>) -> Unit
+    ) {
+        viewModelScope.launch {
+            val result = repository.sendOutgoingMms(
+                recipients = recipients,
+                body = body,
+                subject = subject,
+                attachments = attachments,
+                replyToMessageId = replyToMessageId
+            )
+            onResult(result)
+        }
+    }
+
+    fun sendReaction(
+        targetMessageId: Long,
+        emoji: String,
+        onResult: (Result<Unit>) -> Unit = {}
+    ) {
+        viewModelScope.launch {
+            val result = repository.sendReaction(targetMessageId, emoji)
+            onResult(result)
+        }
+    }
+
+    fun downloadPendingMms(
+        messageId: Long,
+        onResult: (Result<Unit>) -> Unit = {}
+    ) {
+        viewModelScope.launch {
+            val result = repository.downloadMmsByMessageId(messageId)
+            onResult(result)
+        }
+    }
+
+    fun retryFailedMessage(
+        messageId: Long,
+        onResult: (Result<Unit>) -> Unit = {}
+    ) {
+        viewModelScope.launch {
+            val result = repository.retryFailedMessage(messageId)
             onResult(result)
         }
     }
@@ -346,6 +420,24 @@ class MainViewModel(
     fun updateSmsFontBold(bold: Boolean) {
         viewModelScope.launch {
             settingsStore.updateSettings { it.copy(smsFontBold = bold) }
+        }
+    }
+
+    fun updateRcsChatsEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsStore.updateSettings { it.copy(rcsChatsEnabled = enabled) }
+        }
+    }
+
+    fun updateAutoDownloadMms(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsStore.updateSettings { it.copy(autoDownloadMms = enabled) }
+        }
+    }
+
+    fun updateSendReadReceipts(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsStore.updateSettings { it.copy(sendReadReceipts = enabled) }
         }
     }
 

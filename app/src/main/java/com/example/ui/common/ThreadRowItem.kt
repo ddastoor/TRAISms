@@ -20,6 +20,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.outlined.Archive
+import androidx.compose.material.icons.outlined.AttachFile
 import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.DeleteOutline
 import androidx.compose.material.icons.outlined.DriveFileMove
@@ -338,8 +339,8 @@ fun ThreadRowItem(
                             }
                         }
 
-                        // Quick Copy OTP chip & optional category tag
-                        if (thread.extractedOtp != null || showCategoryPill) {
+                        // Quick Copy OTP chip, transport badge, attachment icon & optional category tag
+                        if (thread.extractedOtp != null || showCategoryPill || thread.transportType != "SMS" || thread.hasAttachments) {
                             Spacer(modifier = Modifier.height(8.dp))
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
@@ -347,6 +348,31 @@ fun ThreadRowItem(
                             ) {
                                 if (showCategoryPill) {
                                     CategoryBadgePill(category = thread.category)
+                                }
+                                if (thread.transportType != "SMS") {
+                                    Surface(
+                                        color = MaterialTheme.colorScheme.tertiaryContainer,
+                                        contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
+                                        shape = RoundedCornerShape(6.dp),
+                                        modifier = Modifier.testTag("thread_transport_badge_${thread.threadKey}")
+                                    ) {
+                                        Text(
+                                            text = thread.transportType,
+                                            style = MaterialTheme.typography.labelSmall,
+                                            fontWeight = FontWeight.Bold,
+                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                        )
+                                    }
+                                }
+                                if (thread.hasAttachments) {
+                                    Icon(
+                                        imageVector = Icons.Outlined.AttachFile,
+                                        contentDescription = "Has attachments",
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier
+                                            .size(16.dp)
+                                            .testTag("thread_attachment_icon_${thread.threadKey}")
+                                    )
                                 }
                                 thread.extractedOtp?.let { otpCode ->
                                     Surface(
