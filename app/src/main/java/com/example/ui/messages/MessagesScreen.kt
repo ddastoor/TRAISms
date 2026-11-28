@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -31,6 +32,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.outlined.AutoDelete
@@ -179,30 +181,43 @@ fun MessagesScreen(
     var tabDeleteCountDialog by remember { mutableStateOf<Int?>(null) }
     var showGlobalDeleteDialog by remember { mutableStateOf(false) }
 
+    fun showReplacingSnackbar(
+        message: String,
+        actionLabel: String? = null,
+        duration: SnackbarDuration = SnackbarDuration.Short,
+        onAction: (() -> Unit)? = null
+    ) {
+        scope.launch {
+            snackbarHostState.currentSnackbarData?.dismiss()
+            val res = snackbarHostState.showSnackbar(
+                message = message,
+                actionLabel = actionLabel,
+                duration = duration
+            )
+            if (res == SnackbarResult.ActionPerformed) {
+                onAction?.invoke()
+            }
+        }
+    }
+
     fun executeInboxSwipeAction(action: LeftSwipeAction, swiped: ThreadSummary) {
         val senderTitle = swiped.contactName ?: swiped.rawAddress
         when (action) {
             LeftSwipeAction.ARCHIVE -> {
                 onArchiveThread(swiped.threadKey, true)
-                scope.launch {
-                    val res = snackbarHostState.showSnackbar(
-                        message = "Archived $senderTitle",
-                        actionLabel = "Undo",
-                        duration = SnackbarDuration.Short
-                    )
-                    if (res == SnackbarResult.ActionPerformed) {
-                        onArchiveThread(swiped.threadKey, false)
-                    }
-                }
+                showReplacingSnackbar(
+                    message = "Archived $senderTitle",
+                    actionLabel = "Undo",
+                    duration = SnackbarDuration.Short,
+                    onAction = { onArchiveThread(swiped.threadKey, false) }
+                )
             }
             LeftSwipeAction.DELETE -> {
                 onDeleteThread(swiped.threadKey)
-                scope.launch {
-                    snackbarHostState.showSnackbar(
-                        message = "Deleted conversation with $senderTitle",
-                        duration = SnackbarDuration.Short
-                    )
-                }
+                showReplacingSnackbar(
+                    message = "Deleted conversation with $senderTitle",
+                    duration = SnackbarDuration.Short
+                )
             }
             LeftSwipeAction.ASSIGN_CATEGORY -> {
                 moveSheetTarget = swiped
@@ -225,17 +240,25 @@ fun MessagesScreen(
                             Text(
                                 text = stringResource(R.string.app_name),
                                 style = MaterialTheme.typography.titleLarge,
-                                fontWeight = FontWeight.Bold
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 1,
+                                softWrap = false
                             )
                             Spacer(modifier = Modifier.width(10.dp))
                             Surface(
                                 color = MaterialTheme.colorScheme.surfaceContainer,
-                                shape = RoundedCornerShape(6.dp)
+                                shape = RoundedCornerShape(6.dp),
+                                modifier = Modifier
+                                    .weight(1f, fill = false)
+                                    .testTag("inbox_region_badge")
                             ) {
                                 Text(
                                     text = activeRegionBadge,
                                     style = MaterialTheme.typography.labelSmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1,
+                                    softWrap = false,
+                                    overflow = TextOverflow.Ellipsis,
                                     modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp)
                                 )
                             }
@@ -306,15 +329,13 @@ fun MessagesScreen(
                                         val targetCat = selectedCategory
                                         overflowExpanded = false
                                         onMarkAllReadInCurrentTab(targetCat) { markedCount ->
-                                            scope.launch {
-                                                snackbarHostState.showSnackbar(
-                                                    if (markedCount == 0) {
-                                                        "No unread ${targetCat.title} messages"
-                                                    } else {
-                                                        "Marked $markedCount ${targetCat.title} message(s) as read"
-                                                    }
-                                                )
-                                            }
+                                            showReplacingSnackbar(
+                                                if (markedCount == 0) {
+                                                    "No unread ${targetCat.title} messages"
+                                                } else {
+                                                    "Marked $markedCount ${targetCat.title} message(s) as read"
+                                                }
+                                            )
                                         }
                                     },
                                     modifier = Modifier.testTag("menu_mark_all_read_in_tab")
@@ -424,14 +445,17 @@ fun MessagesScreen(
                                         Text(
                                             text = category.title,
                                             style = MaterialTheme.typography.labelLarge,
-                                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
+                                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                            maxLines = 1,
+                                            softWrap = false
                                         )
                                         if (unread > 0) {
                                             Spacer(modifier = Modifier.width(6.dp))
                                             Box(
                                                 contentAlignment = Alignment.Center,
                                                 modifier = Modifier
-                                                    .clip(CircleShape)
+                                                    .defaultMinSize(minWidth = 20.dp)
+                                                    .clip(RoundedCornerShape(999.dp))
                                                     .background(
                                                         if (isSelected) MaterialTheme.colorScheme.primary
                                                         else MaterialTheme.colorScheme.surfaceContainerHigh
@@ -443,7 +467,9 @@ fun MessagesScreen(
                                                     style = MaterialTheme.typography.labelSmall,
                                                     color = if (isSelected) MaterialTheme.colorScheme.onPrimary
                                                     else MaterialTheme.colorScheme.onSurfaceVariant,
-                                                    fontWeight = FontWeight.Bold
+                                                    fontWeight = FontWeight.Bold,
+                                                    maxLines = 1,
+                                                    softWrap = false
                                                 )
                                             }
                                         }
@@ -509,17 +535,19 @@ fun MessagesScreen(
                                 Text(
                                     text = "Enable Default SMS & Offline Sync",
                                     style = MaterialTheme.typography.titleSmall,
-                                    fontWeight = FontWeight.Bold
+                                    fontWeight = FontWeight.Bold,
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis
                                 )
                             }
                             IconButton(
                                 onClick = onDismissSetupBanner,
-                                modifier = Modifier.size(28.dp)
+                                modifier = Modifier.size(36.dp)
                             ) {
                                 Icon(
                                     imageVector = Icons.Outlined.Close,
                                     contentDescription = "Dismiss setup card",
-                                    modifier = Modifier.size(16.dp)
+                                    modifier = Modifier.size(18.dp)
                                 )
                             }
                         }
@@ -552,18 +580,30 @@ fun MessagesScreen(
                                         permissionsLauncher.launch(perms)
                                     }
                                 },
+                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
                                 modifier = Modifier
                                     .weight(1f)
                                     .testTag("banner_set_default_sms_button")
                             ) {
-                                Text("Set Default SMS")
+                                Text(
+                                    text = "Set Default SMS",
+                                    maxLines = 1,
+                                    softWrap = false,
+                                    overflow = TextOverflow.Ellipsis
+                                )
                             }
 
                             OutlinedButton(
                                 onClick = onOpenOnboardingGuide,
+                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
                                 modifier = Modifier.testTag("banner_privacy_guide_button")
                             ) {
-                                Text("Privacy Guide")
+                                Text(
+                                    text = "Privacy Guide",
+                                    maxLines = 1,
+                                    softWrap = false,
+                                    overflow = TextOverflow.Ellipsis
+                                )
                             }
                         }
                     }
@@ -583,7 +623,7 @@ fun MessagesScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .clickable { onToggleCategoryUnreadOnly(selectedCategory, !showUnreadOnly) }
-                            .padding(horizontal = 16.dp, vertical = 6.dp)
+                            .padding(horizontal = 16.dp, vertical = 8.dp)
                     ) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
@@ -591,31 +631,44 @@ fun MessagesScreen(
                                 .weight(1f)
                                 .padding(end = 12.dp)
                         ) {
-                            Icon(
-                                imageVector = Icons.Outlined.MarkEmailUnread,
-                                contentDescription = null,
-                                tint = if (showUnreadOnly) MaterialTheme.colorScheme.primary
-                                else MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.size(18.dp)
-                            )
-                            Spacer(Modifier.width(8.dp))
-                            Text(
-                                text = stringResource(R.string.show_unread_toggle_label),
-                                style = MaterialTheme.typography.labelLarge,
-                                fontWeight = FontWeight.SemiBold,
-                                maxLines = 1,
-                                softWrap = false
-                            )
-                            Spacer(Modifier.width(8.dp))
-                            Text(
-                                text = if (showUnreadOnly) "Unread only ($unreadInTab)" else "All ($totalInTab)",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                maxLines = 1,
-                                softWrap = false,
-                                overflow = TextOverflow.Ellipsis,
-                                modifier = Modifier.testTag("category_unread_filter_summary")
-                            )
+                            Box(
+                                contentAlignment = Alignment.Center,
+                                modifier = Modifier
+                                    .size(32.dp)
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(
+                                        if (showUnreadOnly) MaterialTheme.colorScheme.primaryContainer
+                                        else MaterialTheme.colorScheme.surfaceContainerHigh
+                                    )
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Outlined.MarkEmailUnread,
+                                    contentDescription = null,
+                                    tint = if (showUnreadOnly) MaterialTheme.colorScheme.primary
+                                    else MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+                            Spacer(Modifier.width(10.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = stringResource(R.string.show_unread_toggle_label),
+                                    style = MaterialTheme.typography.labelLarge,
+                                    fontWeight = FontWeight.SemiBold,
+                                    maxLines = 1,
+                                    softWrap = false,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                Text(
+                                    text = if (showUnreadOnly) "Unread only ($unreadInTab)" else "All ($totalInTab)",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1,
+                                    softWrap = false,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.testTag("category_unread_filter_summary")
+                                )
+                            }
                         }
                         Switch(
                             checked = showUnreadOnly,
@@ -674,20 +727,16 @@ fun MessagesScreen(
                                 onClick = {
                                     if (selectedCategory == SmsCategory.OTP) {
                                         onUpdateOtpAutoDelete(days)
-                                        scope.launch {
-                                            snackbarHostState.showSnackbar(
-                                                if (days == 0) "OTP auto-delete disabled"
-                                                else "OTP SMS older than $label will auto-delete"
-                                            )
-                                        }
+                                        showReplacingSnackbar(
+                                            if (days == 0) "OTP auto-delete disabled"
+                                            else "OTP SMS older than $label will auto-delete"
+                                        )
                                     } else {
                                         onUpdatePromoAutoDelete(days)
-                                        scope.launch {
-                                            snackbarHostState.showSnackbar(
-                                                if (days == 0) "Promotional auto-delete disabled"
-                                                else "Promotional SMS older than $label will auto-delete"
-                                            )
-                                        }
+                                        showReplacingSnackbar(
+                                            if (days == 0) "Promotional auto-delete disabled"
+                                            else "Promotional SMS older than $label will auto-delete"
+                                        )
                                     }
                                 },
                                 label = { Text(label) },
@@ -716,9 +765,11 @@ fun MessagesScreen(
                     verticalArrangement = Arrangement.Center,
                     modifier = Modifier
                         .fillMaxSize()
-                        .padding(32.dp)
+                        .verticalScroll(rememberScrollState())
+                        .padding(start = 24.dp, end = 24.dp, top = 24.dp, bottom = 96.dp)
                         .widthIn(max = 420.dp)
                         .align(Alignment.Center)
+                        .testTag("messages_empty_state")
                 ) {
                     Box(
                         contentAlignment = Alignment.Center,
@@ -817,12 +868,10 @@ fun MessagesScreen(
                             onCopyOtp = { code ->
                                 val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
                                 clipboard?.setPrimaryClip(ClipData.newPlainText("OTP", code))
-                                scope.launch {
-                                    snackbarHostState.showSnackbar(
-                                        message = context.getString(R.string.otp_copied_toast, code),
-                                        duration = SnackbarDuration.Short
-                                    )
-                                }
+                                showReplacingSnackbar(
+                                    message = context.getString(R.string.otp_copied_toast, code),
+                                    duration = SnackbarDuration.Short
+                                )
                             },
                             onSwipeLeftAction = { swiped ->
                                 executeInboxSwipeAction(leftSwipeAction, swiped)
@@ -833,7 +882,7 @@ fun MessagesScreen(
                         )
                         HorizontalDivider(
                             color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.65f),
-                            modifier = Modifier.padding(start = 73.dp)
+                            modifier = Modifier.padding(start = 73.dp, end = 16.dp)
                         )
                     }
                 }
@@ -852,16 +901,14 @@ fun MessagesScreen(
             onConfirm = { chosenCat, saveRule ->
                 moveSheetTarget = null
                 onAssignSenderCategory(targetThread.threadKey, senderTitle, chosenCat, saveRule)
-                scope.launch {
-                    snackbarHostState.showSnackbar(
-                        message = if (saveRule) {
-                            "Always routing $senderTitle to ${chosenCat.title}"
-                        } else {
-                            "Moved $senderTitle to ${chosenCat.title}"
-                        },
-                        duration = SnackbarDuration.Short
-                    )
-                }
+                showReplacingSnackbar(
+                    message = if (saveRule) {
+                        "Always routing $senderTitle to ${chosenCat.title}"
+                    } else {
+                        "Moved $senderTitle to ${chosenCat.title}"
+                    },
+                    duration = SnackbarDuration.Short
+                )
             }
         )
     }
@@ -874,13 +921,15 @@ fun MessagesScreen(
                 Text("Delete all in ${selectedCategory.title}?")
             },
             text = {
-                Text(
-                    if (count == 0) {
-                        "There are currently 0 messages in ${selectedCategory.title}."
-                    } else {
-                        "Permanently delete $count message(s) in ${selectedCategory.title} from both TRAISms and the Android system SMS database?"
-                    }
-                )
+                Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                    Text(
+                        if (count == 0) {
+                            "There are currently 0 messages in ${selectedCategory.title}."
+                        } else {
+                            "Permanently delete $count message(s) in ${selectedCategory.title} from both TRAISms and the Android system SMS database?"
+                        }
+                    )
+                }
             },
             confirmButton = {
                 Button(
@@ -889,9 +938,7 @@ fun MessagesScreen(
                         tabDeleteCountDialog = null
                         if (count > 0) {
                             onDeleteAllInCurrentTab(cat) { deleted ->
-                                scope.launch {
-                                    snackbarHostState.showSnackbar("Deleted $deleted ${cat.title} message(s)")
-                                }
+                                showReplacingSnackbar("Deleted $deleted ${cat.title} message(s)")
                             }
                         }
                     },
@@ -921,9 +968,7 @@ fun MessagesScreen(
             onConfirmDeleteAll = {
                 showGlobalDeleteDialog = false
                 onDeleteAllInApp()
-                scope.launch {
-                    snackbarHostState.showSnackbar("All SMS messages permanently deleted")
-                }
+                showReplacingSnackbar("All SMS messages permanently deleted")
             }
         )
     }

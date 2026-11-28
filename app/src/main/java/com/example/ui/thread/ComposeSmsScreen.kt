@@ -70,6 +70,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.R
 import com.example.data.sms.ContactLookupCache
@@ -233,7 +234,13 @@ fun ComposeSmsScreen(
                             smsTextPrefs.fontSize,
                             smsTextPrefs.bold
                         ),
-                        label = { Text(stringResource(R.string.reply_placeholder)) },
+                        label = {
+                            Text(
+                                text = stringResource(R.string.reply_placeholder),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        },
                         minLines = 1,
                         maxLines = 4,
                         shape = RoundedCornerShape(14.dp),
@@ -248,7 +255,12 @@ fun ComposeSmsScreen(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .weight(1f)
+                                .padding(end = 8.dp)
+                        ) {
                             IconButton(
                                 onClick = { showAttachmentSheet = true },
                                 modifier = Modifier
@@ -282,7 +294,10 @@ fun ComposeSmsScreen(
                                     "${messageBody.length} chars • $segments SMS part(s)"
                                 },
                                 style = MaterialTheme.typography.labelSmall.copy(fontFamily = JetBrainsMonoFamily),
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.testTag("compose_char_counter")
                             )
                         }
                         val canSend = allRecipients.isNotEmpty() &&
@@ -320,7 +335,11 @@ fun ComposeSmsScreen(
                                 modifier = Modifier.size(18.dp)
                             )
                             Spacer(modifier = Modifier.width(8.dp))
-                            Text(if (isMmsMode) "Send MMS" else "Send SMS")
+                            Text(
+                                text = if (isMmsMode) "Send MMS" else "Send SMS",
+                                maxLines = 1,
+                                softWrap = false
+                            )
                         }
                     }
                 }
@@ -456,15 +475,19 @@ fun ComposeSmsScreen(
                                 )
                             }
                             Spacer(modifier = Modifier.width(12.dp))
-                            Column {
+                            Column(modifier = Modifier.weight(1f)) {
                                 Text(
                                     text = contact.displayName,
-                                    style = MaterialTheme.typography.titleSmall
+                                    style = MaterialTheme.typography.titleSmall,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
                                 )
                                 Text(
                                     text = contact.phoneNumber,
                                     style = MaterialTheme.typography.labelSmall.copy(fontFamily = JetBrainsMonoFamily),
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
                                 )
                             }
                         }
@@ -498,15 +521,19 @@ fun ComposeSmsScreen(
                         )
                     }
                     Spacer(modifier = Modifier.width(12.dp))
-                    Column {
+                    Column(modifier = Modifier.weight(1f)) {
                         Text(
                             text = stringResource(R.string.compose_send_directly_to, recipient.trim()),
-                            style = MaterialTheme.typography.titleSmall
+                            style = MaterialTheme.typography.titleSmall,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                         Text(
                             text = stringResource(R.string.compose_direct_recipient_subtitle),
                             style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
                 }

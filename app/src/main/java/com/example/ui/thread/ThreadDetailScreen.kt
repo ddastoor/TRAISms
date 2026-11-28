@@ -15,7 +15,10 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -88,10 +91,10 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.R
-import com.example.data.crypto.SmsFontSize
 import com.example.data.db.MmsAttachmentEntity
 import com.example.data.db.SmsCategory
 import com.example.data.db.SmsMessageEntity
@@ -116,7 +119,7 @@ import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.builtins.serializer
 import kotlinx.serialization.json.Json
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class, ExperimentalLayoutApi::class)
 @Composable
 fun ThreadDetailScreen(
     threadKey: String,
@@ -266,13 +269,17 @@ fun ThreadDetailScreen(
                                         text = "${groupRecipients.size} participants",
                                         style = MaterialTheme.typography.labelSmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
                                         modifier = Modifier.testTag("thread_group_participants_label")
                                     )
                                 } else if (latestMessage?.contactName != null) {
                                     Text(
                                         text = rawAddress,
                                         style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
                                     )
                                 }
                             }
@@ -427,7 +434,13 @@ fun ThreadDetailScreen(
                                     smsTextPrefs.fontSize,
                                     smsTextPrefs.bold
                                 ),
-                                placeholder = { Text(stringResource(R.string.reply_placeholder)) },
+                                placeholder = {
+                                    Text(
+                                        text = stringResource(R.string.reply_placeholder),
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                },
                                 maxLines = 4,
                                 shape = RoundedCornerShape(20.dp),
                                 modifier = Modifier
@@ -514,23 +527,29 @@ fun ThreadDetailScreen(
                         Text(
                             text = "One-way alphanumeric sender header ($rawAddress) — replies are not supported by carrier.",
                             style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            textAlign = TextAlign.Center
                         )
                     }
                 }
             }
         }
     ) { innerPadding ->
-        LazyColumn(
-            state = listState,
-            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+        BoxWithConstraints(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
                 .background(MaterialTheme.colorScheme.background)
-                .testTag("thread_messages_list")
         ) {
+            val bubbleMaxWidth = (maxWidth * 0.85f).coerceIn(240.dp, 420.dp)
+            LazyColumn(
+                state = listState,
+                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .testTag("thread_messages_list")
+            ) {
             items(
                 items = messages,
                 key = { it.id }
@@ -574,7 +593,7 @@ fun ThreadDetailScreen(
                         else MaterialTheme.colorScheme.onPrimary,
                         shape = bubbleShape,
                         modifier = Modifier
-                            .widthIn(max = if (smsTextPrefs.fontSize == SmsFontSize.DEFAULT) 340.dp else 368.dp)
+                            .widthIn(max = bubbleMaxWidth)
                             .clip(bubbleShape)
                             .combinedClickable(
                                 onClick = {},
@@ -731,15 +750,19 @@ fun ThreadDetailScreen(
                         )
                     }
 
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp),
-                        modifier = Modifier.padding(top = 4.dp, start = 4.dp, end = 4.dp)
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                        modifier = Modifier
+                            .padding(top = 4.dp, start = 4.dp, end = 4.dp)
+                            .testTag("thread_metadata_row_${msg.id}")
                     ) {
                         Text(
                             text = "${formatFullDateTime(msg.timestampMillis)} • ${msg.classificationSource}",
                             style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                         if (!isIncoming && msg.deliveryStatus != "NONE") {
                             DeliveryStatusIndicator(
@@ -797,6 +820,7 @@ fun ThreadDetailScreen(
                     }
                 }
             }
+        }
         }
     }
 

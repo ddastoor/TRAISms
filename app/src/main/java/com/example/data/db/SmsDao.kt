@@ -122,7 +122,7 @@ interface SmsDao {
             )
             GROUP BY threadKey
         ) agg ON m.threadKey = agg.threadKey AND (m.timestampMillis * 1000000 + m.id) = agg.maxSortKey
-        WHERE m.isHiddenReaction = 0
+        WHERE m.isArchived = 0 AND m.isHiddenReaction = 0
         ORDER BY m.timestampMillis DESC, m.id DESC
         """
     )
@@ -335,6 +335,8 @@ interface SmsDao {
         WHERE category = :category 
           AND isArchived = 0 
           AND isRead = 0 
+          AND isIncoming = 1 
+          AND isHiddenReaction = 0 
           AND systemSmsId IS NOT NULL
         """
     )
@@ -346,6 +348,8 @@ interface SmsDao {
         WHERE category = :category 
           AND isArchived = 0 
           AND isRead = 0 
+          AND isIncoming = 1 
+          AND isHiddenReaction = 0 
           AND systemMmsId IS NOT NULL
         """
     )
@@ -356,7 +360,9 @@ interface SmsDao {
         SELECT DISTINCT threadKey FROM sms_messages 
         WHERE category = :category 
           AND isArchived = 0 
-          AND isRead = 0
+          AND isRead = 0 
+          AND isIncoming = 1 
+          AND isHiddenReaction = 0
         """
     )
     suspend fun getUnreadThreadKeysInActiveCategory(category: SmsCategory): List<String>
@@ -367,7 +373,9 @@ interface SmsDao {
         SET isRead = 1 
         WHERE category = :category 
           AND isArchived = 0 
-          AND isRead = 0
+          AND isRead = 0 
+          AND isIncoming = 1 
+          AND isHiddenReaction = 0
         """
     )
     suspend fun markAllReadInActiveCategory(category: SmsCategory): Int

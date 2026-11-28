@@ -26,11 +26,16 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import java.util.concurrent.atomic.AtomicLong
 
 data class AssignCategoryRequest(
     val threadKey: String,
@@ -81,11 +86,23 @@ class MainViewModel(
 
     val syncProgress: StateFlow<SyncProgressState> = repository.syncProgress
 
+    private val unreadOverrideSeq = AtomicLong(0L)
+    private val unreadPersistMutex = Mutex()
+    private val _pendingUnreadOverrides =
+        MutableStateFlow<Map<SmsCategory, Pair<Long, Boolean>>>(emptyMap())
+
+    private fun effectiveUnreadOnly(
+        category: SmsCategory,
+        appSettings: AppSettings,
+        pendingOverrides: Map<SmsCategory, Pair<Long, Boolean>>
+    ): Boolean = pendingOverrides[category]?.second ?: appSettings.isCategoryUnreadOnly(category)
+
     val currentCategoryUnreadOnly: StateFlow<Boolean> = combine(
         _selectedCategory,
-        settings
-    ) { cat, appSettings ->
-        appSettings.isCategoryUnreadOnly(cat)
+        settings,
+        _pendingUnreadOverrides
+    ) { cat, appSettings, overrides ->
+        effectiveUnreadOnly(cat, appSettings, overrides)
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5_000),
@@ -95,9 +112,10 @@ class MainViewModel(
     val activeThreads: StateFlow<List<ThreadSummary>> = combine(
         _selectedCategory,
         _searchQuery,
-        settings
-    ) { cat, query, appSettings ->
-        Triple(cat, query.trim(), appSettings.isCategoryUnreadOnly(cat))
+        settings,
+        _pendingUnreadOverrides
+    ) { cat, query, appSettings, overrides ->
+        Triple(cat, query.trim(), effectiveUnreadOnly(cat, appSettings, overrides))
     }.distinctUntilChanged().flatMapLatest { (cat, query, unreadOnly) ->
         if (query.isEmpty()) {
             repository.observeCategoryThreads(cat, unreadOnly = unreadOnly)
@@ -195,11 +213,26 @@ class MainViewModel(
     }
 
     fun updateCategoryUnreadOnly(category: SmsCategory, unreadOnly: Boolean) {
+        val token = unreadOverrideSeq.incrementAndGet()
+        _pendingUnreadOverrides.update { it + (category to (token to unreadOnly)) }
         viewModelScope.launch {
-            settingsStore.updateSettings { current ->
-                current.copy(
-                    categoryShowUnreadOnly = current.categoryShowUnreadOnly + (category.name to unreadOnly)
-                )
+            unreadPersistMutex.withLock {
+                val (targetToken, targetValue) = _pendingUnreadOverrides.value[category] ?: return@withLock
+                try {
+                    settingsStore.updateSettings { current ->
+                        current.copy(
+                            categoryShowUnreadOnly = current.categoryShowUnreadOnly + (category.name to targetValue)
+                        )
+                    }
+                    settings.first { emitted ->
+                        (_isSettingsReady.value && emitted.isCategoryUnreadOnly(category) == targetValue) ||
+                            _pendingUnreadOverrides.value[category]?.first != targetToken
+                    }
+                } finally {
+                    _pendingUnreadOverrides.update { current ->
+                        if (current[category]?.first == targetToken) current - category else current
+                    }
+                }
             }
         }
     }

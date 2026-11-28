@@ -7,8 +7,11 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -101,7 +104,7 @@ private fun resolveSwipeActionVisualSpec(
     )
 }
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class, ExperimentalLayoutApi::class)
 @Composable
 fun ThreadRowItem(
     thread: ThreadSummary,
@@ -259,7 +262,9 @@ fun ThreadRowItem(
                                 text = buildSenderAvatarLabel(senderDisplay),
                                 style = MaterialTheme.typography.titleSmall,
                                 fontWeight = FontWeight.Bold,
-                                color = style.contentColor
+                                color = style.contentColor,
+                                maxLines = 1,
+                                softWrap = false
                             )
                         }
                     }
@@ -285,7 +290,9 @@ fun ThreadRowItem(
                                 text = formatSmsTimestamp(thread.latestTimestampMillis),
                                 style = MaterialTheme.typography.labelSmall,
                                 color = if (hasUnread) MaterialTheme.colorScheme.secondary
-                                else MaterialTheme.colorScheme.onSurfaceVariant
+                                else MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                softWrap = false
                             )
                         }
 
@@ -293,7 +300,9 @@ fun ThreadRowItem(
                             Text(
                                 text = thread.rawAddress,
                                 style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
                         }
 
@@ -325,15 +334,18 @@ fun ThreadRowItem(
                                 Box(
                                     contentAlignment = Alignment.Center,
                                     modifier = Modifier
-                                        .size(22.dp)
+                                        .defaultMinSize(minWidth = 22.dp, minHeight = 22.dp)
                                         .clip(CircleShape)
                                         .background(MaterialTheme.colorScheme.secondary)
+                                        .padding(horizontal = 6.dp, vertical = 2.dp)
                                 ) {
                                     Text(
                                         text = thread.unreadCount.coerceAtMost(99).toString(),
                                         style = MaterialTheme.typography.labelSmall,
                                         color = MaterialTheme.colorScheme.onSecondary,
-                                        fontWeight = FontWeight.Bold
+                                        fontWeight = FontWeight.Bold,
+                                        maxLines = 1,
+                                        softWrap = false
                                     )
                                 }
                             }
@@ -342,9 +354,9 @@ fun ThreadRowItem(
                         // Quick Copy OTP chip, transport badge, attachment icon & optional category tag
                         if (thread.extractedOtp != null || showCategoryPill || thread.transportType != "SMS" || thread.hasAttachments) {
                             Spacer(modifier = Modifier.height(8.dp))
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            FlowRow(
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalArrangement = Arrangement.spacedBy(6.dp)
                             ) {
                                 if (showCategoryPill) {
                                     CategoryBadgePill(category = thread.category)
@@ -360,6 +372,8 @@ fun ThreadRowItem(
                                             text = thread.transportType,
                                             style = MaterialTheme.typography.labelSmall,
                                             fontWeight = FontWeight.Bold,
+                                            maxLines = 1,
+                                            softWrap = false,
                                             modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                                         )
                                     }
@@ -382,12 +396,13 @@ fun ThreadRowItem(
                                         shape = RoundedCornerShape(8.dp),
                                         modifier = Modifier
                                             .minimumInteractiveComponentSize()
+                                            .testTag("copy_otp_chip_${thread.threadKey}")
+                                            .defaultMinSize(minHeight = 32.dp)
                                             .border(
                                                 width = 1.dp,
                                                 color = CategoryOtpFg.copy(alpha = 0.35f),
                                                 shape = RoundedCornerShape(8.dp)
                                             )
-                                            .testTag("copy_otp_chip_${thread.threadKey}")
                                     ) {
                                         Row(
                                             verticalAlignment = Alignment.CenterVertically,
@@ -404,7 +419,9 @@ fun ThreadRowItem(
                                                 style = MaterialTheme.typography.labelMedium.copy(
                                                     fontFamily = JetBrainsMonoFamily,
                                                     fontWeight = FontWeight.Bold
-                                                )
+                                                ),
+                                                maxLines = 1,
+                                                softWrap = false
                                             )
                                         }
                                     }

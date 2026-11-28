@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -68,10 +69,12 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.R
 import com.example.data.crypto.AppSettings
@@ -203,16 +206,15 @@ fun SettingsScreen(
                     shape = RoundedCornerShape(16.dp),
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween,
+                    Column(
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(16.dp)
                     ) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.weight(1f)
+                            modifier = Modifier.fillMaxWidth()
                         ) {
                             Icon(
                                 imageVector = if (isDefaultSmsApp) Icons.Outlined.CheckCircle else Icons.Outlined.Sms,
@@ -220,7 +222,7 @@ fun SettingsScreen(
                                 tint = if (isDefaultSmsApp) EmeraldTertiary else MaterialTheme.colorScheme.primary
                             )
                             Spacer(modifier = Modifier.width(12.dp))
-                            Column {
+                            Column(modifier = Modifier.weight(1f)) {
                                 Text(
                                     text = if (isDefaultSmsApp) {
                                         stringResource(R.string.settings_default_sms_active)
@@ -243,7 +245,6 @@ fun SettingsScreen(
                         }
 
                         if (!isDefaultSmsApp) {
-                            Spacer(modifier = Modifier.width(10.dp))
                             Button(
                                 onClick = {
                                     val roleIntent = systemSmsHelper.createDefaultSmsRequestIntent()
@@ -253,9 +254,17 @@ fun SettingsScreen(
                                         showRestrictedSettingsGuide = true
                                     }
                                 },
-                                modifier = Modifier.testTag("settings_set_default_sms_button")
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .heightIn(min = 44.dp)
+                                    .testTag("settings_set_default_sms_button")
                             ) {
-                                Text(stringResource(R.string.settings_set_default_btn))
+                                Text(
+                                    text = stringResource(R.string.settings_set_default_btn),
+                                    maxLines = 1,
+                                    softWrap = false,
+                                    overflow = TextOverflow.Ellipsis
+                                )
                             }
                         }
                     }
@@ -544,8 +553,9 @@ fun SettingsScreen(
                                 verticalAlignment = Alignment.CenterVertically,
                                 modifier = Modifier
                                     .fillMaxWidth()
+                                    .clip(RoundedCornerShape(10.dp))
                                     .clickable { onUpdateRegionOverride(code) }
-                                    .padding(vertical = 4.dp)
+                                    .padding(horizontal = 8.dp, vertical = 4.dp)
                                     .testTag("region_option_${code.lowercase()}")
                             ) {
                                 RadioButton(
@@ -555,7 +565,8 @@ fun SettingsScreen(
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Text(
                                     text = label,
-                                    style = MaterialTheme.typography.bodyMedium
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    modifier = Modifier.weight(1f)
                                 )
                             }
                         }
@@ -664,7 +675,7 @@ fun SettingsScreen(
                             },
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(48.dp)
+                                .heightIn(min = 48.dp)
                                 .testTag("rerun_categorization_button")
                         ) {
                             Icon(Icons.Outlined.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
@@ -680,7 +691,7 @@ fun SettingsScreen(
                             ),
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(48.dp)
+                                .heightIn(min = 48.dp)
                                 .testTag("danger_zone_delete_all_button")
                         ) {
                             Icon(Icons.Outlined.DeleteForever, contentDescription = null, modifier = Modifier.size(18.dp))
@@ -784,8 +795,9 @@ private fun SettingsToggleRow(
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         modifier = Modifier
             .fillMaxWidth()
+            .clip(RoundedCornerShape(10.dp))
             .clickable { onCheckedChange(!checked) }
-            .padding(vertical = 4.dp)
+            .padding(horizontal = 4.dp, vertical = 4.dp)
     ) {
         if (leadingIcon != null) {
             Icon(

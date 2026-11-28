@@ -3,6 +3,7 @@ package com.example.ui.archive
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -18,8 +19,10 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Archive
 import androidx.compose.material.icons.outlined.Close
@@ -131,6 +134,9 @@ fun ArchiveScreen(
     }
 
     val isMultiSelect = selectedThreadKeys.isNotEmpty()
+    BackHandler(enabled = isMultiSelect) {
+        selectedThreadKeys = emptySet()
+    }
 
     Scaffold(
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
@@ -230,6 +236,7 @@ fun ArchiveScreen(
                     verticalArrangement = Arrangement.Center,
                     modifier = Modifier
                         .fillMaxSize()
+                        .verticalScroll(rememberScrollState())
                         .padding(32.dp)
                         .widthIn(max = 400.dp)
                         .align(Alignment.Center)
@@ -250,13 +257,15 @@ fun ArchiveScreen(
                     }
                     Spacer(modifier = Modifier.height(16.dp))
                     Text(
-                        text = stringResource(R.string.archive_empty_title),
+                        text = if (searchQuery.isNotBlank()) "No matching archived conversations"
+                        else stringResource(R.string.archive_empty_title),
                         style = MaterialTheme.typography.titleMedium,
                         textAlign = TextAlign.Center
                     )
                     Spacer(modifier = Modifier.height(6.dp))
                     Text(
-                        text = stringResource(R.string.archive_empty_subtitle),
+                        text = if (searchQuery.isNotBlank()) "Try a different sender name, phone number, or message keyword."
+                        else stringResource(R.string.archive_empty_subtitle),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         textAlign = TextAlign.Center
@@ -317,7 +326,7 @@ fun ArchiveScreen(
                         )
                         HorizontalDivider(
                             color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.65f),
-                            modifier = Modifier.padding(start = 73.dp)
+                            modifier = Modifier.padding(start = 73.dp, end = 16.dp)
                         )
                     }
                 }

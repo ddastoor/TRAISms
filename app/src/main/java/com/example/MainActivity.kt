@@ -27,11 +27,16 @@ import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Archive
 import androidx.compose.material.icons.filled.Backup
@@ -69,6 +74,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
@@ -691,6 +697,7 @@ fun TraiSmsPrimaryApp(
                 modifier = Modifier
                     .fillMaxSize()
                     .windowInsetsPadding(WindowInsets.safeDrawing)
+                    .consumeWindowInsets(WindowInsets.safeDrawing)
             ) {
                 NavigationRail(
                     containerColor = MaterialTheme.colorScheme.surface,
@@ -712,7 +719,14 @@ fun TraiSmsPrimaryApp(
                                     archivedCount = archivedCount
                                 )
                             },
-                            label = { Text(stringResource(item.labelRes)) },
+                            label = {
+                                Text(
+                                    text = stringResource(item.labelRes),
+                                    maxLines = 1,
+                                    softWrap = false,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            },
                             modifier = Modifier.testTag(item.testTag)
                         )
                     }
@@ -788,7 +802,14 @@ fun BottomNavigationBar(
                         archivedCount = archivedCount
                     )
                 },
-                label = { Text(stringResource(item.labelRes)) },
+                label = {
+                    Text(
+                        text = stringResource(item.labelRes),
+                        maxLines = 1,
+                        softWrap = false,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                },
                 modifier = Modifier.testTag(item.testTag)
             )
         }
@@ -843,43 +864,51 @@ private fun AppLockGateScreen(onUnlockRequested: () -> Unit) {
         modifier = Modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
-            .padding(32.dp)
+            .safeDrawingPadding()
+            .verticalScroll(rememberScrollState())
+            .padding(24.dp)
             .testTag("app_lock_gate_screen")
     ) {
-        Box(
-            contentAlignment = Alignment.Center,
-            modifier = Modifier
-                .size(72.dp)
-                .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.primaryContainer)
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier.widthIn(max = 420.dp)
         ) {
-            Icon(
-                imageVector = Icons.Outlined.Fingerprint,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(38.dp)
+            Box(
+                contentAlignment = Alignment.Center,
+                modifier = Modifier
+                    .size(72.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.primaryContainer)
+            ) {
+                Icon(
+                    imageVector = Icons.Outlined.Fingerprint,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(38.dp)
+                )
+            }
+            Spacer(modifier = Modifier.height(20.dp))
+            Text(
+                text = stringResource(R.string.app_locked_title),
+                style = MaterialTheme.typography.headlineMedium,
+                textAlign = TextAlign.Center
             )
-        }
-        Spacer(modifier = Modifier.height(20.dp))
-        Text(
-            text = stringResource(R.string.app_locked_title),
-            style = MaterialTheme.typography.headlineMedium
-        )
-        Spacer(modifier = Modifier.height(8.dp))
-        Text(
-            text = stringResource(R.string.app_locked_subtitle),
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Center
-        )
-        Spacer(modifier = Modifier.height(24.dp))
-        Button(
-            onClick = onUnlockRequested,
-            modifier = Modifier
-                .height(50.dp)
-                .testTag("unlock_biometric_button")
-        ) {
-            Text(stringResource(R.string.unlock_button))
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = stringResource(R.string.app_locked_subtitle),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center
+            )
+            Spacer(modifier = Modifier.height(24.dp))
+            Button(
+                onClick = onUnlockRequested,
+                modifier = Modifier
+                    .heightIn(min = 50.dp)
+                    .testTag("unlock_biometric_button")
+            ) {
+                Text(stringResource(R.string.unlock_button))
+            }
         }
     }
 }

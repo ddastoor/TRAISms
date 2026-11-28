@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
@@ -228,7 +229,7 @@ fun OnboardingScreen(
                     },
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(54.dp)
+                        .heightIn(min = 54.dp)
                         .testTag("set_default_sms_button")
                 ) {
                     Icon(
@@ -288,7 +289,7 @@ fun OnboardingScreen(
                     onClick = onSkipToInbox,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(52.dp)
+                        .heightIn(min = 52.dp)
                         .testTag("continue_to_inbox_button")
                 ) {
                     Text(stringResource(R.string.onboarding_continue_readonly))
@@ -312,7 +313,7 @@ fun OnboardingScreen(
                 },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(48.dp)
+                    .heightIn(min = 48.dp)
                     .testTag("grant_permissions_button")
             ) {
                 Text(stringResource(R.string.onboarding_grant_permissions))
@@ -325,7 +326,7 @@ fun OnboardingScreen(
                     border = BorderStroke(1.dp, MaterialTheme.colorScheme.secondary),
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(50.dp)
+                        .heightIn(min = 50.dp)
                         .testTag("preview_demo_inbox_button")
                 ) {
                     Icon(
@@ -376,7 +377,7 @@ private fun SecurityPillarRow(
             )
         }
         Spacer(modifier = Modifier.width(12.dp))
-        Column {
+        Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = title,
                 style = MaterialTheme.typography.titleSmall,
@@ -469,7 +470,9 @@ fun RestrictedSettingsGuidanceCard(
                             style = MaterialTheme.typography.bodySmall,
                             fontWeight = FontWeight.Medium,
                             color = MaterialTheme.colorScheme.onSurface,
-                            modifier = Modifier.padding(top = 2.dp)
+                            modifier = Modifier
+                                .weight(1f)
+                                .padding(top = 2.dp)
                         )
                     }
                 }
@@ -501,7 +504,7 @@ fun RestrictedSettingsGuidanceCard(
                 ),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(48.dp)
+                    .heightIn(min = 48.dp)
                     .testTag("open_app_info_settings_button")
             ) {
                 Icon(
@@ -530,7 +533,7 @@ fun RestrictedSettingsGuidanceCard(
                 ),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(44.dp)
+                    .heightIn(min = 44.dp)
                     .testTag("open_default_apps_settings_button")
             ) {
                 Text(

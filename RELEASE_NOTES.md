@@ -1,4 +1,4 @@
-# TRAISms v1.0.7 — Eventual Categorization & RCS/TRAI Fallback Hardening
+# TRAISms v1.0.8 — Mark All as Read & Show Unread Sync Fixes + Multi-Viewport UI Polish
 
 **Package ID:** `com.traisms.app`  
 **Minimum Android Version:** Android 7.0 (API 24) • **Target SDK:** Android 16 (API 36)  
@@ -8,13 +8,13 @@
 
 ## Download & Install
 
-Download **`TRAISms-v1.0.7-release.apk`** from the **Assets** section below:
+Download **`TRAISms-v1.0.8-release.apk`** from the **Assets** section below:
 
 1. Verify the file's SHA-256 checksum against `SHA256SUMS.txt`:
    ```bash
    sha256sum -c SHA256SUMS.txt
    ```
-2. Transfer `TRAISms-v1.0.7-release.apk` to your Android phone and open it to install.
+2. Transfer `TRAISms-v1.0.8-release.apk` to your Android phone and open it to install.
 3. Launch **TRAISms** and tap **Set TRAISms as Default SMS App** to import and encrypt your existing SMS/MMS inbox on-device.
 
 ### Installing on Android 15 / 16 (Google Pixel & Sideloaded APKs)
@@ -31,9 +31,18 @@ To unlock Default SMS access in 3 steps:
 
 ---
 
-## What's New in v1.0.7
+## What's New in v1.0.8
 
-- **Guaranteed Eventual Categorization & `Other` Fallback Across SMS, MMS, and RCS:**
+- **Mark All as Read & Show Unread Toggle Synchronization Fixes:**
+  - Aligned `SmsDao` unread queries (`getUnreadSystemIdsInActiveCategory`, `getUnreadSystemMmsIdsInActiveCategory`, `getUnreadThreadKeysInActiveCategory`, and `markAllReadInActiveCategory`) with `isIncoming = 1 AND isHiddenReaction = 0` so phantom outgoing or hidden reaction rows never inflate unread counts or leave stale read states behind.
+  - Excluded archived threads from `searchActiveThreads`, cancelled active thread notifications inside `SmsRepository.markThreadAsRead`, and added generation-guarded synchronous optimistic per-category `Show unread` state in `MainViewModel` so switching tabs or tapping rapidly never lags or inverts.
+- **Clean Material 3 Polish & Zero-Glitch Multi-Viewport Geometry (`360dp`–`840dp` & `LARGER` Bold Font):**
+  - Stacked the **Show unread** title and `Unread only (N)` / `All (N)` summary vertically with a tinted icon container, wrapped `ThreadRowItem` badges/OTP chips and `ThreadDetailScreen` metadata/actions in `FlowRow`, and capped tablet conversation bubbles cleanly via `BoxWithConstraints`.
+  - Prevented `ComposeSmsScreen` character counter and **Send MMS** collisions on compact `360dp` and `526dp` keyboard-open viewports, replaced overlapping snackbars immediately, made empty states/sheets/dialogs cleanly scrollable with FAB clearance, added `ArchiveScreen` multi-select `BackHandler`, and consumed `safeDrawing` window insets for tablet `NavigationRail` layouts.
+
+### Previous Highlights (v1.0.7, v1.0.6, v1.0.5, v1.0.4, v1.0.3, v1.0.2 & v1.0.1)
+
+- **Guaranteed Eventual Categorization & `Other` Fallback Across SMS, MMS, and RCS (`v1.0.7`):**
   - Unwraps RCS IMS/SIP/tel URIs (`tel:`, `sip:`, `@ims...`, `/TYPE=PLMN`) and cleans RBM agent domains (`@rbm.goog`) before categorizing so personal/unsaved RCS handles route cleanly to **Personal** or **Unknown** and uncategorizable RCS Business/MMS/SMS messages deterministically fall back into **Other**.
   - Supports underscore/short TRAI DLT suffixes (`VM_HDFCBK_T`, `SBI_P`, `VM-HDFCBK-T@rbm.goog`) alongside `-P`/`-S`/`-T`/`-G` and `127xxx`.
   - Automatically upgrades temporary **Other** `PENDING_DOWNLOAD` MMS placeholders once downloaded (`M-Retrieve.conf` or `Telephony.Mms` sync) and upgrades previously **Unknown** senders to **Personal** when saved into device Contacts, while preserving Group MMS/RCS in **Personal** across full re-categorization.

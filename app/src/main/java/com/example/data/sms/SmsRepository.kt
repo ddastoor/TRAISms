@@ -1395,6 +1395,10 @@ class SmsRepository(
         systemSmsHelper.markSystemMessagesRead(systemIds)
         val mmsIds = smsDao.getSystemMmsIdsForThread(threadKey)
         systemSmsHelper.markSystemMmsRead(mmsIds)
+        SmsNotificationHelper.cancelNotification(
+            appContext,
+            SmsNotificationHelper.notificationIdForThread(threadKey)
+        )
     }
 
     suspend fun setThreadArchived(threadKey: String, archived: Boolean) = withContext(Dispatchers.IO) {

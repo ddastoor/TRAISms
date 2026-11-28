@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -71,6 +72,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.R
 import com.example.data.crypto.AppSettings
@@ -253,13 +256,16 @@ fun BackupScreen(
                                     Text(
                                         text = "Linked File: ${settings.driveFileName.ifBlank { "TRAISms_Encrypted_Backup.trai" }}",
                                         style = MaterialTheme.typography.labelLarge,
-                                        color = MaterialTheme.colorScheme.primary
+                                        color = MaterialTheme.colorScheme.primary,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
                                     )
                                     Text(
                                         text = settings.persistedDriveUri,
                                         style = MaterialTheme.typography.labelSmall.copy(fontFamily = JetBrainsMonoFamily),
                                         color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        maxLines = 2
+                                        maxLines = 2,
+                                        overflow = TextOverflow.Ellipsis
                                     )
                                 }
                             }
@@ -271,7 +277,7 @@ fun BackupScreen(
                             },
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(48.dp)
+                                .heightIn(min = 48.dp)
                                 .testTag("choose_drive_backup_file_button")
                         ) {
                             Icon(Icons.Outlined.CloudUpload, contentDescription = null, modifier = Modifier.size(18.dp))
@@ -341,7 +347,7 @@ fun BackupScreen(
                             enabled = passphraseDraft.trim().length >= 6,
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(48.dp)
+                                .heightIn(min = 48.dp)
                                 .testTag("save_backup_passphrase_button")
                         ) {
                             Text("${stringResource(R.string.backup_save_passphrase)} (Min 6 chars)")
@@ -368,7 +374,11 @@ fun BackupScreen(
                         StatusMetricRow("Vault Messages Ready", "$totalMessagesInDb SMS")
                         StatusMetricRow("Last Backup Time", formatFullDateTime(settings.lastBackupEpochMillis))
                         StatusMetricRow("Last Backed Up Count", "${settings.lastBackupCount} SMS")
-                        StatusMetricRow("Last Status", settings.lastBackupStatus)
+                        StatusMetricRow(
+                            label = "Last Status",
+                            value = settings.lastBackupStatus,
+                            modifier = Modifier.testTag("backup_status_row_last_status")
+                        )
 
                         val canRunBackup = settings.persistedDriveUri.isNotBlank() &&
                             settings.backupPassphrase.isNotBlank() &&
@@ -389,7 +399,7 @@ fun BackupScreen(
                             enabled = canRunBackup,
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(50.dp)
+                                .heightIn(min = 50.dp)
                                 .testTag("backup_now_button")
                         ) {
                             if (isBackupInProgress) {
@@ -422,7 +432,7 @@ fun BackupScreen(
                             enabled = !isBackupInProgress,
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(48.dp)
+                                .heightIn(min = 48.dp)
                                 .testTag("restore_from_backup_button")
                         ) {
                             Icon(Icons.Outlined.Restore, contentDescription = null, modifier = Modifier.size(18.dp))
@@ -513,7 +523,10 @@ fun BackupScreen(
             onDismissRequest = { pendingRestoreUri = null },
             title = { Text("Decrypt & Restore Backup") },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                    modifier = Modifier.verticalScroll(rememberScrollState())
+                ) {
                     Text(
                         text = "Enter the encryption passphrase used when creating this .trai backup. Existing messages are deduplicated by SHA-256 hash so duplicates are never created.",
                         style = MaterialTheme.typography.bodySmall
@@ -573,21 +586,28 @@ fun BackupScreen(
 }
 
 @Composable
-private fun StatusMetricRow(label: String, value: String) {
+private fun StatusMetricRow(
+    label: String,
+    value: String,
+    modifier: Modifier = Modifier
+) {
     Row(
-        horizontalArrangement = Arrangement.SpaceBetween,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier.fillMaxWidth()
+        modifier = modifier.fillMaxWidth()
     ) {
         Text(
             text = label,
             style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.weight(1f)
         )
         Text(
             text = value,
             style = MaterialTheme.typography.labelLarge,
-            color = MaterialTheme.colorScheme.onSurface
+            color = MaterialTheme.colorScheme.onSurface,
+            textAlign = TextAlign.End,
+            modifier = Modifier.weight(1.2f)
         )
     }
 }

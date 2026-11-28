@@ -1,5 +1,6 @@
 package com.example.ui.common
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -9,6 +10,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -55,6 +57,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.R
 import com.example.data.db.SmsCategory
@@ -166,7 +169,9 @@ fun CategoryBadgePill(
             Text(
                 text = category.title,
                 style = MaterialTheme.typography.labelSmall,
-                fontWeight = FontWeight.SemiBold
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                softWrap = false
             )
         }
     }
@@ -193,6 +198,7 @@ fun MoveSenderCategoryBottomSheet(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                .testTag("move_category_sheet_content")
                 .navigationBarsPadding()
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 20.dp, vertical = 8.dp)
@@ -206,6 +212,8 @@ fun MoveSenderCategoryBottomSheet(
                 text = senderTitle,
                 style = MaterialTheme.typography.labelLarge.copy(fontFamily = JetBrainsMonoFamily),
                 color = MaterialTheme.colorScheme.secondary,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.testTag("move_category_sender_title")
             )
             Spacer(modifier = Modifier.height(12.dp))
@@ -217,6 +225,7 @@ fun MoveSenderCategoryBottomSheet(
                     color = if (isSelected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.55f)
                     else MaterialTheme.colorScheme.surfaceContainerLow,
                     shape = RoundedCornerShape(10.dp),
+                    border = if (isSelected) BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary) else null,
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(vertical = 3.dp)
@@ -294,7 +303,7 @@ fun MoveSenderCategoryBottomSheet(
                 onClick = { onConfirm(selectedCategory, alwaysMoveRule) },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(50.dp)
+                    .heightIn(min = 50.dp)
                     .testTag("confirm_move_category_button")
             ) {
                 Text(text = stringResource(R.string.apply_category_button))
@@ -333,7 +342,10 @@ fun GlobalDeleteAllMessagesDialog(
             )
         },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Column(
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+                modifier = Modifier.verticalScroll(rememberScrollState())
+            ) {
                 Text(
                     text = "This permanently erases all $totalCount SMS messages across every category, Archive, and the Android system SMS database. This cannot be undone unless you have an encrypted .trai backup.",
                     style = MaterialTheme.typography.bodyMedium
