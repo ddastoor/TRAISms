@@ -58,8 +58,6 @@ data class AppSettings(
     val lastBackupStatus: String = "No backup created yet",
     val lastBackupCount: Int = 0,
     val appLockEnabled: Boolean = false, // OFF by default
-    val blockScreenshots: Boolean = true, // ON by default on physical devices; paused on streaming emulator unless forced
-    val userForcedFlagSecureInStream: Boolean = false,
     val initialSyncCompleted: Boolean = false,
     val onboardingDismissed: Boolean = false,
     val smsFontSize: SmsFontSize = SmsFontSize.DEFAULT,

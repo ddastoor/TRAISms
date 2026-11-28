@@ -2,7 +2,7 @@
 
 **Production-grade, security-hardened, 100% offline Android SMS organizer** built with Kotlin, Jetpack Compose, Material Design 3, SQLCipher, Google Tink, Jetpack DataStore, LiteRT, and WorkManager.
 
-> **Latest Release & APK Download (`v1.0.4`):** Visit the [**GitHub Releases**](https://github.com/ddastoor/TRAISms/releases/latest) page to download `TRAISms-v1.0.4-release.apk` (pattern: `TRAISms-v<version>-release.apk`) and `SHA256SUMS.txt`.
+> **Latest Release & APK Download (`v1.0.5`):** Visit the [**GitHub Releases**](https://github.com/ddastoor/TRAISms/releases/latest) page to download `TRAISms-v1.0.5-release.apk` (pattern: `TRAISms-v<version>-release.apk`) and `SHA256SUMS.txt`.
 >
 > **Android 15+ / Pixel Sideloading Note:** Android 15/16's *Enhanced Confirmation Mode* blocks sideloaded APKs from becoming the Default SMS App until you allow restricted settings. If Android denies the request:
 > 1. Tap **Open App Info** in TRAISms (or open **Settings → Apps → TRAISms**).
@@ -19,7 +19,7 @@
 | **Database Encryption** | Full Room SQLite encryption via **SQLCipher 4.6** (`SupportOpenHelperFactory`) + 32-byte key wrapped in Android Keystore via **Google Tink** |
 | **Settings Encryption** | Jetpack DataStore encrypted with Google Tink `Aead` (`AES256_GCM`) — zero `EncryptedSharedPreferences` |
 | **Google Drive Backup** | Zero-permission Android Storage Access Framework (`SAF`) + `GZIP` + `AES-256-GCM` (`PBKDF2WithHmacSHA256`, 600,000 iterations) |
-| **Screen & Biometric Lock** | `FLAG_SECURE` enabled by default on release builds + optional `BiometricPrompt` App Lock |
+| **Biometric App Lock** | Optional `BiometricPrompt` / Device PIN App Lock (`AppLockGateScreen`) with full screenshot support across all screens |
 | **UI Aesthetic** | Ultra-clean, high-contrast Material 3 **Light Mode Only** with `Plus Jakarta Sans` & `JetBrains Mono` |
 
 ---

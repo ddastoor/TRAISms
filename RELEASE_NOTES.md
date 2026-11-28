@@ -1,4 +1,4 @@
-# TRAISms v1.0.4 — Cleaner Show Unread Strip & 3-Dot Overflow Menu Polish
+# TRAISms v1.0.5 — App-Wide Screenshot Support with Full Security Hardening Intact
 
 **Package ID:** `com.traisms.app`  
 **Minimum Android Version:** Android 7.0 (API 24) • **Target SDK:** Android 16 (API 36)  
@@ -8,13 +8,13 @@
 
 ## Download & Install
 
-Download **`TRAISms-v1.0.4-release.apk`** from the **Assets** section below:
+Download **`TRAISms-v1.0.5-release.apk`** from the **Assets** section below:
 
 1. Verify the file's SHA-256 checksum against `SHA256SUMS.txt`:
    ```bash
    sha256sum -c SHA256SUMS.txt
    ```
-2. Transfer `TRAISms-v1.0.4-release.apk` to your Android phone and open it to install.
+2. Transfer `TRAISms-v1.0.5-release.apk` to your Android phone and open it to install.
 3. Launch **TRAISms** and tap **Set TRAISms as Default SMS App** to import and encrypt your existing SMS inbox on-device.
 
 ### Installing on Android 15 / 16 (Google Pixel & Sideloaded APKs)
@@ -31,9 +31,17 @@ To unlock Default SMS access in 3 steps:
 
 ---
 
-## What's New in v1.0.4
+## What's New in v1.0.5
 
-- **Cleaner Horizontal "Show Unread" Strip (Zero Button Interference):**
+- **Unrestricted Screenshot Support Across All App Surfaces:**
+  - Removed `WindowManager.LayoutParams.FLAG_SECURE` restrictions so you can freely capture screenshots of any screen, category tab, conversation thread, bottom sheet, dropdown menu, or dialog across TRAISms on both physical devices and emulators.
+  - Seamlessly migrates existing encrypted `traisms_secure_settings.pb` Tink DataStore installations so upgrading from earlier releases immediately unlocks screenshots without losing any preferences or messages.
+- **All Security-Hardened Protections Preserved Intact:**
+  - Keeps 100% offline manifest network stripping (`INTERNET` and `ACCESS_NETWORK_STATE` removed), 256-bit SQLCipher database encryption, Google Tink Android Hardware Keystore key wrapping, PBKDF2-HMAC-SHA256 (`600,000` iterations) + AES-256-GCM `.trai` backups, Biometric / Device PIN **App Lock**, lockscreen notification privacy & App Lock OTP redaction, and Android 13+ sensitive OTP clipboard masking completely untouched.
+
+### Previous Highlights (v1.0.4, v1.0.3, v1.0.2 & v1.0.1)
+
+- **Cleaner Horizontal "Show Unread" Strip (`v1.0.4`):**
   - Removed the inline **Mark all as read** button from the horizontal per-category filter strip (`category_unread_filter_bar`) so the strip houses **only** the **Show unread** toggle, crisp single-line `Unread only (N)` / `All (N)` summary, and Material 3 switch without text crowding or touch-target interference on narrow screens.
 - **Exclusive 3-Dot (`⋮`) Overflow Menu "Mark All as Read in [Category]":**
   - Kept per-category **Mark all as read in [Category]** exclusively inside the inbox **⋮** overflow menu (automatically enabled when `unreadCount > 0` and disabled when a tab has zero unread messages), surgically marking only active messages in the selected tab as read across SQLCipher Room and `Telephony.Sms` while dismissing their notifications and leaving all 7 other tabs and Archive untouched.
@@ -94,4 +102,4 @@ Every incoming and imported SMS is evaluated completely offline in strict waterf
 - **Database at Rest:** Encrypted with 256-bit **SQLCipher** (`net.zetetic:sqlcipher-android`) using a random 32-byte key wrapped by **Google Tink** (`AndroidKeysetManager` AES-256-GCM in Android Hardware Keystore).
 - **Preferences at Rest:** Encrypted Jetpack DataStore via Tink AEAD serializer (zero deprecated `EncryptedSharedPreferences`).
 - **Offline-Safe Google Drive Backup:** Uses Android's Storage Access Framework (`ACTION_CREATE_DOCUMENT` / `ACTION_OPEN_DOCUMENT`) to write GZIP + `AES/GCM/NoPadding` (`PBKDF2WithHmacSHA256`, 600,000 iterations) `.trai` archives directly through the Google Drive app without network permissions in TRAISms.
-- **Runtime Protections:** `FLAG_SECURE` screenshot blocking enabled by default on physical release builds and optional `BiometricPrompt` App Lock.
+- **Runtime Protections:** Optional `BiometricPrompt` / Device PIN App Lock (`AppLockGateScreen`), lockscreen notification redaction, and Android 13+ sensitive clipboard masking while allowing screenshots across the app.

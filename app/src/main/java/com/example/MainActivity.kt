@@ -151,40 +151,13 @@ class MainActivity : ComponentActivity() {
         pendingExternalAction = parseExternalIntent(intent)
 
         val appContainer = (applicationContext as TraiSmsApp).container
-        val isStreamingOrEmulator = BuildConfig.DEBUG || appContainer.systemSmsHelper.isRunningOnEmulator()
-
-        // Keep FLAG_SECURE clear in Streaming Emulator / debug preview so the browser stream renders visibly
-        if (isStreamingOrEmulator) {
-            window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
-        } else {
-            window.setFlags(
-                WindowManager.LayoutParams.FLAG_SECURE,
-                WindowManager.LayoutParams.FLAG_SECURE
-            )
-        }
+        window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
 
         setContent {
             val mainViewModel: MainViewModel = viewModel(
                 factory = MainViewModel.provideFactory(appContainer)
             )
             val settings by mainViewModel.settings.collectAsStateWithLifecycle()
-
-            LaunchedEffect(settings.blockScreenshots, settings.userForcedFlagSecureInStream) {
-                val shouldEnableFlagSecure = if (isStreamingOrEmulator) {
-                    settings.blockScreenshots && settings.userForcedFlagSecureInStream
-                } else {
-                    settings.blockScreenshots
-                }
-
-                if (shouldEnableFlagSecure) {
-                    window.setFlags(
-                        WindowManager.LayoutParams.FLAG_SECURE,
-                        WindowManager.LayoutParams.FLAG_SECURE
-                    )
-                } else {
-                    window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
-                }
-            }
 
             LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
                 mainViewModel.refreshPermissionsAndSyncIfAuthorized()
@@ -536,7 +509,6 @@ fun TraiSmsPrimaryApp(
                                 viewModel.updateAppLockEnabled(false)
                             }
                         },
-                        onToggleBlockScreenshots = viewModel::updateBlockScreenshots,
                         onRerunCategorization = viewModel::rerunCategorizationOnAll,
                         onDeleteAllMessagesInApp = viewModel::deleteAllMessagesInApp,
                         onUpdateSmsFontSize = viewModel::updateSmsFontSize,

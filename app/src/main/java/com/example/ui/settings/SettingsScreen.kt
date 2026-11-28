@@ -103,7 +103,7 @@ fun SettingsScreen(
     onUpdateBackupSchedule: (BackupSchedule, Int) -> Unit,
     onNavigateToBackupTab: () -> Unit,
     onToggleAppLock: (Boolean) -> Unit,
-    onToggleBlockScreenshots: (Boolean) -> Unit,
+    onToggleBlockScreenshots: (Boolean) -> Unit = {},
     onRerunCategorization: ((Int) -> Unit) -> Unit,
     onDeleteAllMessagesInApp: () -> Unit,
     onUpdateSmsFontSize: (SmsFontSize) -> Unit = {},
@@ -564,27 +564,6 @@ fun SettingsScreen(
                         onCheckedChange = onToggleAppLock,
                         testTag = "app_lock_switch",
                         leadingIcon = Icons.Outlined.Fingerprint
-                    )
-
-                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-
-                    val isEmulatorEnv = remember { systemSmsHelper.isRunningOnEmulator() || com.example.BuildConfig.DEBUG }
-                    val effectiveFlagSecure = if (isEmulatorEnv) {
-                        settings.blockScreenshots && settings.userForcedFlagSecureInStream
-                    } else {
-                        settings.blockScreenshots
-                    }
-
-                    SettingsToggleRow(
-                        title = "Block Screenshots & Recents Preview (FLAG_SECURE)",
-                        subtitle = if (isEmulatorEnv) {
-                            "Auto-paused in Streaming Emulator so your browser preview stays visible (enforced by default on physical release devices). Toggle ON only on a physical screen."
-                        } else {
-                            "Enabled by default to shield OTPs and bank alerts from screen capture or task-switcher snapshots."
-                        },
-                        checked = effectiveFlagSecure,
-                        onCheckedChange = onToggleBlockScreenshots,
-                        testTag = "flag_secure_switch"
                     )
                 }
 

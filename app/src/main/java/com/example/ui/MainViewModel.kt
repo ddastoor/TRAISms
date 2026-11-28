@@ -457,17 +457,6 @@ class MainViewModel(
         }
     }
 
-    fun updateBlockScreenshots(enabled: Boolean) {
-        viewModelScope.launch {
-            settingsStore.updateSettings {
-                it.copy(
-                    blockScreenshots = enabled,
-                    userForcedFlagSecureInStream = enabled
-                )
-            }
-        }
-    }
-
     fun rerunCategorizationOnAll(onComplete: (Int) -> Unit) {
         viewModelScope.launch {
             val count = repository.rerunCategorizationOnAllMessages()

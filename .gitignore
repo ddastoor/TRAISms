@@ -18,4 +18,8 @@ local.properties
 debug.keystore
 my-upload-key.jks
 /release-dist
+.workflow
+__pycache__/
+*.py[cod]
+
 
