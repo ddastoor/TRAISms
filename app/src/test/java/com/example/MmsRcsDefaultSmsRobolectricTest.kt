@@ -1119,7 +1119,7 @@ class MmsRcsDefaultSmsRobolectricTest {
                 assertNotNull(firstLaunch)
                 assertTrue(
                     firstLaunch.intent.action == Telephony.Sms.Intents.ACTION_CHANGE_DEFAULT ||
-                        firstLaunch.intent.getStringExtra(Intent.EXTRA_ROLE_NAME) == RoleManager.ROLE_SMS ||
+                        firstLaunch.intent.getStringExtra("android.intent.extra.ROLE_NAME") == RoleManager.ROLE_SMS ||
                         firstLaunch.intent.action?.contains("ROLE", ignoreCase = true) == true
                 )
 
