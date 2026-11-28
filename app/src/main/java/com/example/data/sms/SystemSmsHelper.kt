@@ -981,7 +981,9 @@ class SystemSmsHelper(private val context: Context) {
     }
 
     private fun resolveSmsManager(subscriptionId: Int): SmsManager? {
+        @Suppress("DEPRECATION")
         val base = appContext.getSystemService(SmsManager::class.java)
+            ?: runCatching { SmsManager.getDefault() }.getOrNull()
         return if (subscriptionId >= 0 && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             base?.createForSubscriptionId(subscriptionId) ?: base
         } else {

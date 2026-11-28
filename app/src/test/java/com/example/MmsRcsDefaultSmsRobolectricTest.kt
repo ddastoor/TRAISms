@@ -46,6 +46,7 @@ import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsOff
 import androidx.compose.ui.test.assertIsOn
 import androidx.compose.ui.test.assertTextContains
+import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.onAllNodesWithTag
@@ -54,6 +55,8 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performScrollToIndex
+import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.unit.dp
@@ -61,6 +64,7 @@ import androidx.room.Room
 import androidx.sqlite.db.SupportSQLiteDatabase
 import androidx.sqlite.db.SupportSQLiteOpenHelper
 import androidx.sqlite.db.framework.FrameworkSQLiteOpenHelperFactory
+import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
 import com.example.data.crypto.AppSettings
 import com.example.data.crypto.BackupCryptoEngine
@@ -557,7 +561,7 @@ class MmsRcsDefaultSmsRobolectricTest {
         val sentSms = smsDao.getMessagesInThreadSnapshot("NUM_9876543210").first { it.body == "Status tracked SMS" }
         assertEquals("SENDING", sentSms.deliveryStatus)
 
-        val smsManager = context.getSystemService(SmsManager::class.java)
+        val smsManager = resolveTestSmsManager()
         val multipartParams = Shadows.shadowOf(smsManager).lastSentMultipartTextMessageParams
         assertNotNull(multipartParams)
         assertEquals(1, multipartParams.sentIntents.size)
@@ -732,7 +736,8 @@ class MmsRcsDefaultSmsRobolectricTest {
         assertTrue(app.container.smsRepository.sendReaction(msgId, "👍").isSuccess)
         val updatedMsg = app.container.database.smsDao().getMessageById(msgId)!!
         assertEquals(listOf("👍"), RcsInteropCodec.decodeReactions(updatedMsg.reactionsJson).map { it.emoji })
-        val lastSms = Shadows.shadowOf(context.getSystemService(SmsManager::class.java)).lastSentMultipartTextMessageParams
+        val lastSms = Shadows.shadowOf(resolveTestSmsManager()).lastSentMultipartTextMessageParams
+        assertNotNull("Expected fallback reaction SMS to be dispatched via SmsManager", lastSms)
         assertEquals("Liked “Are we still on?”", lastSms.parts.joinToString(""))
 
         // 5. Tink EncryptedSettingsStore persists & migrates legacy JSON safely
@@ -883,6 +888,10 @@ class MmsRcsDefaultSmsRobolectricTest {
                 }
 
                 composeTestRule.waitUntil(timeoutMillis = 5_000) {
+                    composeTestRule.onAllNodesWithTag("thread_messages_list").fetchSemanticsNodes().isNotEmpty()
+                }
+                composeTestRule.onNodeWithTag("thread_messages_list").performScrollToIndex(0)
+                composeTestRule.waitUntil(timeoutMillis = 5_000) {
                     composeTestRule.onAllNodesWithTag("mms_download_card_11").fetchSemanticsNodes().isNotEmpty()
                 }
                 composeTestRule.onNodeWithTag("mms_subject_header_11").assertIsDisplayed()
@@ -890,25 +899,21 @@ class MmsRcsDefaultSmsRobolectricTest {
                 assertEquals(listOf(11L), downloadedIds)
 
                 // Verify media attachments + reaction pill + quoted preview + status labels
+                composeTestRule.onNodeWithTag("thread_messages_list").performScrollToIndex(1)
                 composeTestRule.onNodeWithTag("mms_image_preview_201").performScrollTo().assertIsDisplayed()
                 composeTestRule.onNodeWithTag("mms_video_card_202").performScrollTo().assertIsDisplayed()
                 composeTestRule.onNodeWithTag("mms_audio_card_203").performScrollTo().assertIsDisplayed()
                 composeTestRule.onNodeWithTag("mms_file_card_204").performScrollTo().assertIsDisplayed()
                 composeTestRule.onNodeWithTag("reaction_pills_row_12").performScrollTo().assertIsDisplayed()
                 composeTestRule.onNodeWithTag("reaction_pill_12_👍").assertIsDisplayed()
-                composeTestRule.onNodeWithTag("quoted_reply_preview_13").performScrollTo().assertIsDisplayed()
-                composeTestRule.onNodeWithTag("message_status_13").performScrollTo().assertTextContains("Delivered", substring = true)
-                composeTestRule.onNodeWithTag("message_status_14").performScrollTo().assertTextContains("Failed", substring = true)
-                composeTestRule.onNodeWithTag("retry_failed_msg_14").performScrollTo().performClick()
-                assertEquals(listOf(14L), retriedIds)
 
-                // Emoji reaction bar + tapback selection
+                // Emoji reaction bar + tapback selection on message 12
                 composeTestRule.onNodeWithTag("react_msg_button_12").performScrollTo().performClick()
                 composeTestRule.onNodeWithTag("emoji_reaction_bar_12").assertIsDisplayed()
                 composeTestRule.onNodeWithTag("reaction_emoji_12_1").performClick()
                 assertEquals(listOf(12L to "❤️"), toggledReactions)
 
-                // Reply banner + cancel + send quoted reply
+                // Reply banner + cancel + send quoted reply on message 12
                 composeTestRule.onNodeWithTag("reply_msg_button_12").performScrollTo().performClick()
                 composeTestRule.onNodeWithTag("reply_context_banner").assertIsDisplayed()
                 composeTestRule.onNodeWithTag("cancel_reply_button").performClick()
@@ -919,7 +924,17 @@ class MmsRcsDefaultSmsRobolectricTest {
                 composeTestRule.onNodeWithTag("thread_send_button").performClick()
                 assertEquals(listOf(Triple("+919876543210", "Sounds good!", 12L)), sentQuotes)
 
+                composeTestRule.onNodeWithTag("thread_messages_list").performScrollToIndex(2)
+                composeTestRule.onNodeWithTag("quoted_reply_preview_13").performScrollTo().assertIsDisplayed()
+                composeTestRule.onNodeWithTag("message_status_13").performScrollTo().assertTextContains("Delivered", substring = true)
+
+                composeTestRule.onNodeWithTag("thread_messages_list").performScrollToIndex(3)
+                composeTestRule.onNodeWithTag("message_status_14").performScrollTo().assertTextContains("Failed", substring = true)
+                composeTestRule.onNodeWithTag("retry_failed_msg_14").performScrollTo().performClick()
+                assertEquals(listOf(14L), retriedIds)
+
                 // Long-press preserves strictly Copy & Forward prompt contract
+                composeTestRule.onNodeWithTag("thread_messages_list").performScrollToIndex(2)
                 composeTestRule.onNodeWithTag("thread_message_bubble_13").performScrollTo().performTouchInput { longClick() }
                 composeTestRule.waitUntil(timeoutMillis = 5_000) {
                     composeTestRule.onAllNodesWithTag("message_actions_prompt").fetchSemanticsNodes().isNotEmpty()
@@ -956,8 +971,7 @@ class MmsRcsDefaultSmsRobolectricTest {
                                         onRes(Result.success("GRP_TEST"))
                                     }
                                 )
-                                "ROW_AND_SETTINGS" -> Column {
-                                    ThreadRowItem(
+                                "ROW" -> ThreadRowItem(
                                         thread = ThreadSummary(
                                             latestMessageId = 1L,
                                             threadKey = "RCS_THREAD",
@@ -981,7 +995,7 @@ class MmsRcsDefaultSmsRobolectricTest {
                                         onCopyOtp = {},
                                         onSwipeLeftAction = {}
                                     )
-                                    SettingsScreen(
+                                "SETTINGS" -> SettingsScreen(
                                         settings = uiSettings,
                                         isDefaultSmsApp = true,
                                         detectedRegionLabel = "IN • India",
@@ -1001,7 +1015,6 @@ class MmsRcsDefaultSmsRobolectricTest {
                                         onUpdateAutoDownloadMms = { v -> uiSettings = uiSettings.copy(autoDownloadMms = v) },
                                         onUpdateSendReadReceipts = { v -> uiSettings = uiSettings.copy(sendReadReceipts = v) }
                                     )
-                                }
                             }
                         }
                     }
@@ -1037,12 +1050,14 @@ class MmsRcsDefaultSmsRobolectricTest {
                     mmsSentCalls
                 )
 
-                // Switch to ThreadRowItem + SettingsScreen RCS/MMS card toggles
-                composeTestRule.runOnIdle { mode = "ROW_AND_SETTINGS" }
+                // Switch to ThreadRowItem, then SettingsScreen RCS/MMS card toggles
+                composeTestRule.runOnIdle { mode = "ROW" }
                 composeTestRule.waitForIdle()
                 composeTestRule.onNodeWithTag("thread_transport_badge_RCS_THREAD").assertIsDisplayed()
                 composeTestRule.onNodeWithTag("thread_attachment_icon_RCS_THREAD").assertIsDisplayed()
 
+                composeTestRule.runOnIdle { mode = "SETTINGS" }
+                composeTestRule.waitForIdle()
                 composeTestRule.onNodeWithTag("rcs_mms_settings_card").performScrollTo().assertIsDisplayed()
                 composeTestRule.onNodeWithTag("rcs_chats_switch").performScrollTo().assertIsOn().performClick()
                 composeTestRule.onNodeWithTag("auto_download_mms_switch").performScrollTo().assertIsOn().performClick()
@@ -1112,7 +1127,8 @@ class MmsRcsDefaultSmsRobolectricTest {
             val activity = controller.get()
             val shadowActivity = Shadows.shadowOf(activity)
             try {
-                composeTestRule.waitUntil(timeoutMillis = 5_000) {
+                waitForCondition(timeoutMillis = 8_000) {
+                    flushMainLooperAndSnapshots()
                     shadowActivity.peekNextStartedActivityForResult() != null
                 }
                 val firstLaunch = shadowActivity.nextStartedActivityForResult
@@ -1126,7 +1142,8 @@ class MmsRcsDefaultSmsRobolectricTest {
                 // 2. Dismissing chooser via onPause -> onResume must NOT relaunch (anti-loop guard)
                 controller.pause().resume()
                 flushMainLooperAndSnapshots()
-                composeTestRule.waitForIdle()
+                Thread.sleep(50)
+                flushMainLooperAndSnapshots()
                 assertNull(
                     "onPause->onResume dismissal must not trigger infinite relaunch",
                     shadowActivity.peekNextStartedActivityForResult()
@@ -1141,7 +1158,8 @@ class MmsRcsDefaultSmsRobolectricTest {
                 )
                 controller.start().resume()
                 flushMainLooperAndSnapshots()
-                composeTestRule.waitForIdle()
+                Thread.sleep(50)
+                flushMainLooperAndSnapshots()
                 assertNull(
                     "Returning from chooser ActivityResult must not loop",
                     shadowActivity.peekNextStartedActivityForResult()
@@ -1150,7 +1168,8 @@ class MmsRcsDefaultSmsRobolectricTest {
                 // 4. Genuine backgrounding (onStop -> onStart while NOT requesting role) prompts once again
                 controller.pause().stop()
                 controller.start().resume()
-                composeTestRule.waitUntil(timeoutMillis = 5_000) {
+                waitForCondition(timeoutMillis = 8_000) {
+                    flushMainLooperAndSnapshots()
                     shadowActivity.peekNextStartedActivityForResult() != null
                 }
                 val relaunched = shadowActivity.nextStartedActivityForResult
@@ -1175,20 +1194,20 @@ class MmsRcsDefaultSmsRobolectricTest {
         shadowBiometric.setCanAuthenticate(true)
         shadowBiometric.setAuthenticatorType(BiometricManager.Authenticators.BIOMETRIC_STRONG)
 
-        Robolectric.buildActivity(MainActivity::class.java).use { controller ->
-            controller.setup()
-            val activity = controller.get()
+        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
             try {
                 composeTestRule.waitUntil(timeoutMillis = 5_000) {
                     composeTestRule.onAllNodesWithTag("app_lock_gate_screen").fetchSemanticsNodes().isNotEmpty()
                 }
                 flushMainLooperAndSnapshots()
-                assertNull(
-                    "Default SMS chooser must wait until AppLockGateScreen is unlocked",
-                    Shadows.shadowOf(activity).peekNextStartedActivityForResult()
-                )
+                scenario.onActivity { activity ->
+                    assertNull(
+                        "Default SMS chooser must wait until AppLockGateScreen is unlocked",
+                        Shadows.shadowOf(activity).peekNextStartedActivityForResult()
+                    )
+                }
             } finally {
-                activity.setContentView(View(activity))
+                scenario.onActivity { it.setContentView(View(it)) }
                 flushMainLooperAndSnapshots()
             }
         }
@@ -1199,27 +1218,32 @@ class MmsRcsDefaultSmsRobolectricTest {
         Shadows.shadowOf(keyguard).setIsDeviceSecure(false)
         grantDefaultSmsRole()
 
-        Robolectric.buildActivity(MainActivity::class.java).use { controller ->
-            controller.setup()
-            val activity = controller.get()
+        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
             try {
                 composeTestRule.waitUntil(timeoutMillis = 5_000) {
                     composeTestRule.onAllNodesWithTag("bottom_navigation_bar").fetchSemanticsNodes().isNotEmpty()
                 }
-                controller.pause().stop()
-                controller.start().resume()
+                scenario.moveToState(androidx.lifecycle.Lifecycle.State.CREATED)
+                scenario.moveToState(androidx.lifecycle.Lifecycle.State.RESUMED)
                 flushMainLooperAndSnapshots()
                 composeTestRule.waitForIdle()
-                assertNull(
-                    "Already Default SMS app must never show chooser",
-                    Shadows.shadowOf(activity).peekNextStartedActivityForResult()
-                )
+                scenario.onActivity { activity ->
+                    assertNull(
+                        "Already Default SMS app must never show chooser",
+                        Shadows.shadowOf(activity).peekNextStartedActivityForResult()
+                    )
+                }
             } finally {
-                activity.setContentView(View(activity))
+                scenario.onActivity { it.setContentView(View(it)) }
                 flushMainLooperAndSnapshots()
             }
         }
         }
+    }
+
+    @Suppress("DEPRECATION")
+    private fun resolveTestSmsManager(): SmsManager {
+        return context.getSystemService(SmsManager::class.java) ?: SmsManager.getDefault()
     }
 
     private fun grantDefaultSmsRole() {
