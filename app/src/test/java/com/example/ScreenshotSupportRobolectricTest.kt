@@ -32,6 +32,7 @@ import androidx.compose.runtime.snapshots.Snapshot
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.AndroidUiDispatcher
 import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
@@ -90,6 +91,7 @@ import org.junit.runner.RunWith
 import org.junit.runners.model.Statement
 import org.robolectric.Robolectric
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.RuntimeEnvironment
 import org.robolectric.Shadows
 import org.robolectric.annotation.Config
 import org.robolectric.shadow.api.Shadow
@@ -335,8 +337,51 @@ class ScreenshotSupportRobolectricTest {
                 flushMainLooperAndSnapshots()
             }
         }
+    }
 
-        // 2. ThreadDetailRoute + Message Options ModalBottomSheet
+    @Test
+    fun `ThreadDetailComposeSmsAndMoveCategoryBottomSheetRoutesAllowScreenshots`(): Unit {
+        runBlocking {
+            val smsDao = app.container.database.smsDao()
+            smsDao.insertMessage(
+                SmsMessageEntity(
+                    systemSmsId = 6101L,
+                    threadKey = "SENDER-OTP",
+                    rawAddress = "SENDER-OTP",
+                    contactName = null,
+                    body = "Sample OTP message 100003",
+                    bodySha256 = BackupCryptoEngine.sha256Hex("Sample OTP message 100003"),
+                    timestampMillis = 1_700_000_003_000L,
+                    isIncoming = true,
+                    isRead = false,
+                    isArchived = false,
+                    category = SmsCategory.OTP,
+                    extractedOtp = "482910",
+                    confidenceScore = 0.99f,
+                    classificationSource = "TEST"
+                )
+            )
+            smsDao.insertMessage(
+                SmsMessageEntity(
+                    systemSmsId = 6102L,
+                    threadKey = "SENDER-PERSONAL",
+                    rawAddress = "SENDER-PERSONAL",
+                    contactName = null,
+                    body = "Sample Personal message",
+                    bodySha256 = BackupCryptoEngine.sha256Hex("Sample Personal message"),
+                    timestampMillis = 1_700_000_004_000L,
+                    isIncoming = true,
+                    isRead = false,
+                    isArchived = false,
+                    category = SmsCategory.PERSONAL,
+                    extractedOtp = null,
+                    confidenceScore = 0.99f,
+                    classificationSource = "TEST"
+                )
+            )
+        }
+
+        // 1. ThreadDetailRoute + Message Options ModalBottomSheet
         val threadIntent = Intent(context, MainActivity::class.java).apply {
             putExtra(SmsNotificationHelper.EXTRA_OPEN_THREAD_KEY, "SENDER-OTP")
         }
@@ -363,7 +408,7 @@ class ScreenshotSupportRobolectricTest {
             }
         }
 
-        // 3. MoveSenderCategoryBottomSheet via ACTION_ASSIGN_CATEGORY
+        // 2. MoveSenderCategoryBottomSheet via ACTION_ASSIGN_CATEGORY
         val assignIntent = Intent(context, MainActivity::class.java).apply {
             action = SmsNotificationHelper.ACTION_ASSIGN_CATEGORY
             putExtra(SmsNotificationHelper.EXTRA_THREAD_KEY, "SENDER-PERSONAL")
@@ -387,7 +432,7 @@ class ScreenshotSupportRobolectricTest {
             }
         }
 
-        // 4. ComposeSmsRoute via ACTION_SENDTO
+        // 3. ComposeSmsRoute via ACTION_SENDTO
         val composeIntent = Intent(Intent.ACTION_SENDTO, Uri.parse("smsto:+919876543210")).apply {
             setClass(context, MainActivity::class.java)
             putExtra("sms_body", "Screenshot verification draft")
@@ -408,17 +453,21 @@ class ScreenshotSupportRobolectricTest {
     }
 
     @Test
-    @Config(sdk = [34], qualifiers = "w840dp-h900dp-xxhdpi")
     fun `Tablet NavigationRail layout allows screenshots without FLAG_SECURE`(): Unit {
-        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
-            try {
-                composeTestRule.waitForIdle()
-                composeTestRule.onNodeWithTag("primary_navigation_rail").assertIsDisplayed()
-                scenario.onActivity { assertScreenshotsAllowedAcrossAllWindows(it) }
-            } finally {
-                scenario.onActivity { it.setContentView(View(it)) }
-                flushMainLooperAndSnapshots()
+        RuntimeEnvironment.setQualifiers("w840dp-h900dp-xxhdpi")
+        try {
+            ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+                try {
+                    composeTestRule.waitForIdle()
+                    composeTestRule.onNodeWithTag("primary_navigation_rail").assertIsDisplayed()
+                    scenario.onActivity { assertScreenshotsAllowedAcrossAllWindows(it) }
+                } finally {
+                    scenario.onActivity { it.setContentView(View(it)) }
+                    flushMainLooperAndSnapshots()
+                }
             }
+        } finally {
+            RuntimeEnvironment.setQualifiers("w411dp-h914dp-xxhdpi")
         }
     }
 
@@ -702,7 +751,13 @@ class ScreenshotSupportRobolectricTest {
             assertEquals(true, clip.description.extras?.getBoolean(ClipDescription.EXTRA_IS_SENSITIVE))
 
             // 4. AppLockGateScreen blocks inbox access until authenticated while still allowing screenshots
-            app.container.settingsStore.updateSettings { it.copy(appLockEnabled = true) }
+            app.container.settingsStore.updateSettings {
+                it.copy(
+                    appLockEnabled = true,
+                    initialSyncCompleted = true,
+                    onboardingDismissed = true
+                )
+            }
             val keyguard = context.getSystemService(KeyguardManager::class.java)
             Shadows.shadowOf(keyguard).setIsDeviceSecure(true)
             val biometricManager = context.getSystemService(BiometricManager::class.java)
@@ -710,7 +765,14 @@ class ScreenshotSupportRobolectricTest {
             shadowBiometric.setCanAuthenticate(true)
             shadowBiometric.setAuthenticatorType(BiometricManager.Authenticators.BIOMETRIC_STRONG)
 
-            ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+            val lockIntent = Intent(context, MainActivity::class.java).apply {
+                action = SmsNotificationHelper.ACTION_ASSIGN_CATEGORY
+                putExtra(SmsNotificationHelper.EXTRA_THREAD_KEY, "LOCKED-OTP")
+                putExtra(SmsNotificationHelper.EXTRA_RAW_ADDRESS, "LOCKED-OTP")
+                putExtra(SmsNotificationHelper.EXTRA_SENDER_TITLE, "HDFC Bank")
+                putExtra(SmsNotificationHelper.EXTRA_CURRENT_CATEGORY, SmsCategory.OTP.name)
+            }
+            ActivityScenario.launch<MainActivity>(lockIntent).use { scenario ->
                 try {
                     composeTestRule.waitUntil(timeoutMillis = 5_000) {
                         composeTestRule.onAllNodesWithTag("app_lock_gate_screen")
@@ -718,47 +780,59 @@ class ScreenshotSupportRobolectricTest {
                     }
                     composeTestRule.onNodeWithTag("app_lock_gate_screen").assertIsDisplayed()
                     composeTestRule.onNodeWithTag("unlock_biometric_button").assertIsDisplayed()
-                    composeTestRule.onAllNodesWithTag("bottom_navigation_bar").assertCountEquals(0)
+                    assertTrue(
+                        composeTestRule.onAllNodesWithTag("bottom_navigation_bar")
+                            .fetchSemanticsNodes().isEmpty()
+                    )
                     scenario.onActivity { assertScreenshotsAllowedAcrossAllWindows(it) }
                 } finally {
                     scenario.onActivity { it.setContentView(View(it)) }
                     flushMainLooperAndSnapshots()
                 }
             }
+        }
+    }
 
-            // 5. GlobalDeleteAllMessagesDialog enforces uppercase "DELETE" confirmation
-            Robolectric.buildActivity(ComponentActivity::class.java).use { controller ->
-                controller.setup()
-                val hostActivity = controller.get()
-                try {
-                    var confirmed = false
-                    hostActivity.setContent {
-                        TraiSmsTheme {
-                            GlobalDeleteAllMessagesDialog(
-                                totalCount = 42,
-                                onDismiss = {},
-                                onConfirmDeleteAll = { confirmed = true }
-                            )
-                        }
+    @Test
+    fun `GlobalDeleteAllMessagesDialog enforces uppercase DELETE confirmation while allowing screenshots`(): Unit {
+        Robolectric.buildActivity(ComponentActivity::class.java).use { controller ->
+            controller.setup()
+            val hostActivity = controller.get()
+            try {
+                var confirmed = false
+                hostActivity.setContent {
+                    TraiSmsTheme {
+                        GlobalDeleteAllMessagesDialog(
+                            totalCount = 42,
+                            onDismiss = {},
+                            onConfirmDeleteAll = { confirmed = true }
+                        )
                     }
-                    composeTestRule.waitForIdle()
-                    composeTestRule.onNodeWithTag("global_delete_confirm_button").assertIsNotEnabled()
-
-                    composeTestRule.onNodeWithTag("global_delete_confirm_input").performTextInput("DEL")
-                    composeTestRule.waitForIdle()
-                    composeTestRule.onNodeWithTag("global_delete_confirm_button").assertIsNotEnabled()
-
-                    composeTestRule.onNodeWithTag("global_delete_confirm_input").performTextInput("ETE")
-                    composeTestRule.waitForIdle()
-                    composeTestRule.onNodeWithTag("global_delete_confirm_button")
-                        .assertIsEnabled()
-                        .performClick()
-                    composeTestRule.waitForIdle()
-                    assertTrue(confirmed)
-                } finally {
-                    hostActivity.setContentView(View(hostActivity))
-                    flushMainLooperAndSnapshots()
                 }
+                composeTestRule.waitForIdle()
+                assertScreenshotsAllowedAcrossAllWindows(hostActivity)
+                composeTestRule.onNodeWithTag("global_delete_confirm_button").assertIsNotEnabled()
+
+                composeTestRule.onNodeWithTag("global_delete_confirm_input")
+                    .performSemanticsAction(SemanticsActions.SetText) { setText ->
+                        setText(AnnotatedString("DEL"))
+                    }
+                composeTestRule.waitForIdle()
+                composeTestRule.onNodeWithTag("global_delete_confirm_button").assertIsNotEnabled()
+
+                composeTestRule.onNodeWithTag("global_delete_confirm_input")
+                    .performSemanticsAction(SemanticsActions.SetText) { setText ->
+                        setText(AnnotatedString("DELETE"))
+                    }
+                composeTestRule.waitForIdle()
+                composeTestRule.onNodeWithTag("global_delete_confirm_button")
+                    .assertIsEnabled()
+                    .performSemanticsAction(SemanticsActions.OnClick)
+                composeTestRule.waitForIdle()
+                assertTrue(confirmed)
+            } finally {
+                hostActivity.setContentView(View(hostActivity))
+                flushMainLooperAndSnapshots()
             }
         }
     }
