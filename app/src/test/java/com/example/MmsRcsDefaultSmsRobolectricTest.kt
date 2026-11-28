@@ -178,7 +178,6 @@ class MmsRcsDefaultSmsRobolectricTest {
             ShadowRoleManager.reset()
             ShadowBiometricManager.reset()
             ShadowDialog.reset()
-            Shadows.shadowOf(resolveTestSmsManager()).clearSmsSent()
             val keyguard = context.getSystemService(KeyguardManager::class.java)
             Shadows.shadowOf(keyguard).setIsDeviceSecure(false)
             context.getSystemService(NotificationManager::class.java).cancelAll()
