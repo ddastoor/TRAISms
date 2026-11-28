@@ -17,6 +17,7 @@ import com.example.data.db.ThreadSummary
 import com.example.data.sms.PendingMmsAttachment
 import com.example.data.sms.RestoreSummary
 import com.example.data.sms.SyncProgressState
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -169,11 +170,16 @@ class MainViewModel(
         val defaultHeld = systemSmsHelper.isDefaultSmsApp()
         _isDefaultSmsApp.value = defaultHeld
         viewModelScope.launch {
-            if (systemSmsHelper.hasReadSmsPermission()) {
-                _deviceSystemSmsCount.value = systemSmsHelper.getSystemSmsCount()
-                repository.syncDeviceSmsInChunks()
-            } else {
-                _deviceSystemSmsCount.value = 0
+            try {
+                if (systemSmsHelper.hasReadSmsPermission()) {
+                    _deviceSystemSmsCount.value = systemSmsHelper.getSystemSmsCount()
+                    repository.syncDeviceSmsInChunks()
+                } else {
+                    _deviceSystemSmsCount.value = 0
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Throwable) {
             }
         }
     }

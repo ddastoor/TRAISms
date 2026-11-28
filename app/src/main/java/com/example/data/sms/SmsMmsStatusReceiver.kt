@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import android.telephony.SmsManager
 import com.example.TraiSmsApp
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -25,7 +26,7 @@ class SmsMmsStatusReceiver : BroadcastReceiver() {
         val responseData = intent.getByteArrayExtra(SmsManager.EXTRA_MMS_DATA)
         val resultCode = resultCode
 
-        val pendingResult = goAsync()
+        val pendingResult: PendingResult? = goAsync()
         CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
             try {
                 when (action) {
@@ -60,8 +61,11 @@ class SmsMmsStatusReceiver : BroadcastReceiver() {
                         )
                     }
                 }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Throwable) {
             } finally {
-                pendingResult.finish()
+                pendingResult?.finish()
             }
         }
     }

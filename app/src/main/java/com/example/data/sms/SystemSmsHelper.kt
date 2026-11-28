@@ -830,7 +830,12 @@ class SystemSmsHelper(private val context: Context) {
         return runCatching {
             val smsManager = resolveSmsManager(-1)
                 ?: throw IllegalStateException("Device SmsManager unavailable.")
-            val parts = smsManager.divideMessage(messageText)
+            val divided = runCatching { smsManager.divideMessage(messageText) }.getOrNull()
+            val parts: ArrayList<String> = if (divided.isNullOrEmpty()) {
+                splitSmsFallback(messageText)
+            } else {
+                ArrayList(divided)
+            }
 
             val immutableFlags = PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
             val sentIntents = if (messageId > 0L) {
@@ -879,6 +884,20 @@ class SystemSmsHelper(private val context: Context) {
                 deliveryIntents
             )
         }
+    }
+
+    private fun splitSmsFallback(text: String): ArrayList<String> {
+        if (text.isEmpty()) return arrayListOf("")
+        val maxSegmentLen = if (text.all { it.code < 128 }) 160 else 70
+        if (text.length <= maxSegmentLen) return arrayListOf(text)
+        val chunks = ArrayList<String>((text.length / maxSegmentLen) + 1)
+        var start = 0
+        while (start < text.length) {
+            val end = (start + maxSegmentLen).coerceAtMost(text.length)
+            chunks.add(text.substring(start, end))
+            start = end
+        }
+        return chunks
     }
 
     fun sendMultimediaMessage(

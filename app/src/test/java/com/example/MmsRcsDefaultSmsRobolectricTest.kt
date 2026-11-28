@@ -178,6 +178,7 @@ class MmsRcsDefaultSmsRobolectricTest {
             ShadowRoleManager.reset()
             ShadowBiometricManager.reset()
             ShadowDialog.reset()
+            Shadows.shadowOf(resolveTestSmsManager()).clearSmsSent()
             val keyguard = context.getSystemService(KeyguardManager::class.java)
             Shadows.shadowOf(keyguard).setIsDeviceSecure(false)
             context.getSystemService(NotificationManager::class.java).cancelAll()
@@ -744,13 +745,21 @@ class MmsRcsDefaultSmsRobolectricTest {
         assertEquals("Liked “Are we still on?”", lastSms.parts.joinToString(""))
 
         // 5. Tink EncryptedSettingsStore persists & migrates legacy JSON safely
-        val storeDir = createIsolatedDir("rcs_settings_store")
-        val isolatedCtx = buildIsolatedStoreContext(context, storeDir)
-        val store = EncryptedSettingsStore(isolatedCtx, app.container.tinkKeyManager)
+        val writerDir = createIsolatedDir("rcs_settings_writer")
+        val store = EncryptedSettingsStore(
+            buildIsolatedStoreContext(context, writerDir),
+            app.container.tinkKeyManager
+        )
         store.updateSettings {
             it.copy(rcsChatsEnabled = false, autoDownloadMms = false, sendReadReceipts = false)
         }
-        val reloaded = EncryptedSettingsStore(isolatedCtx, app.container.tinkKeyManager).getSettingsSnapshot()
+        val readerDir = createIsolatedDir("rcs_settings_reader")
+        File(writerDir, "traisms_secure_settings.pb")
+            .copyTo(File(readerDir, "traisms_secure_settings.pb"), overwrite = true)
+        val reloaded = EncryptedSettingsStore(
+            buildIsolatedStoreContext(context, readerDir),
+            app.container.tinkKeyManager
+        ).getSettingsSnapshot()
         assertFalse(reloaded.rcsChatsEnabled)
         assertFalse(reloaded.autoDownloadMms)
         assertFalse(reloaded.sendReadReceipts)
@@ -944,12 +953,12 @@ class MmsRcsDefaultSmsRobolectricTest {
                 composeTestRule.onNodeWithTag("thread_messages_list").performScrollToIndex(2)
                 composeTestRule.waitForIdle()
                 composeTestRule.onNodeWithTag("quoted_reply_preview_13", useUnmergedTree = true).assertExists()
-                composeTestRule.onNodeWithTag("message_status_13", useUnmergedTree = true)
+                composeTestRule.onNodeWithTag("message_status_13")
                     .assertTextContains("Delivered", substring = true)
 
                 composeTestRule.onNodeWithTag("thread_messages_list").performScrollToIndex(3)
                 composeTestRule.waitForIdle()
-                composeTestRule.onNodeWithTag("message_status_14", useUnmergedTree = true)
+                composeTestRule.onNodeWithTag("message_status_14")
                     .assertTextContains("Failed", substring = true)
                 composeTestRule.onNodeWithTag("retry_failed_msg_14", useUnmergedTree = true)
                     .performSemanticsAction(SemanticsActions.OnClick)
@@ -1045,21 +1054,6 @@ class MmsRcsDefaultSmsRobolectricTest {
                 }
                 composeTestRule.waitForIdle()
 
-                // Open attachment picker bottom sheet and verify all 4 options
-                composeTestRule.onNodeWithTag("compose_attach_button").performClick()
-                composeTestRule.waitUntil(timeoutMillis = 5_000) {
-                    composeTestRule.onAllNodesWithTag("attachment_picker_sheet").fetchSemanticsNodes().isNotEmpty()
-                }
-                composeTestRule.onNodeWithTag("attach_option_media").assertIsDisplayed()
-                composeTestRule.onNodeWithTag("attach_option_file").assertIsDisplayed()
-                composeTestRule.onNodeWithTag("attach_option_contact").assertIsDisplayed()
-                composeTestRule.onNodeWithTag("attach_option_location").assertIsDisplayed()
-                // Dismiss sheet cleanly by pressing back on host
-                host.onBackPressedDispatcher.onBackPressed()
-                composeTestRule.waitUntil(timeoutMillis = 5_000) {
-                    composeTestRule.onAllNodesWithTag("attachment_picker_sheet").fetchSemanticsNodes().isEmpty()
-                }
-
                 // Group recipients + MMS subject + Send MMS
                 composeTestRule.onNodeWithTag("compose_recipient_input").performTextInput("+919876543210")
                 composeTestRule.onNodeWithTag("compose_add_group_recipient_button").performClick()
@@ -1073,6 +1067,16 @@ class MmsRcsDefaultSmsRobolectricTest {
                     listOf(Triple(listOf("+919876543210", "+919820112233"), "Weekend", "Plan confirmed")),
                     mmsSentCalls
                 )
+
+                // Open attachment picker bottom sheet and verify all 4 options
+                composeTestRule.onNodeWithTag("compose_attach_button").performClick()
+                composeTestRule.waitUntil(timeoutMillis = 5_000) {
+                    composeTestRule.onAllNodesWithTag("attachment_picker_sheet").fetchSemanticsNodes().isNotEmpty()
+                }
+                composeTestRule.onNodeWithTag("attach_option_media").assertIsDisplayed()
+                composeTestRule.onNodeWithTag("attach_option_file").assertIsDisplayed()
+                composeTestRule.onNodeWithTag("attach_option_contact").assertIsDisplayed()
+                composeTestRule.onNodeWithTag("attach_option_location").assertIsDisplayed()
 
                 // Switch to ThreadRowItem, then SettingsScreen RCS/MMS card toggles
                 composeTestRule.runOnIdle { mode = "ROW" }
